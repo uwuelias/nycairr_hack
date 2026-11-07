@@ -1,11 +1,71 @@
 @import "tailwindcss";
 
+:root {
+  --primary: #0064e0;
+  --primary-deep: #0457cb;
+  --primary-soft: #0091ff;
+  --on-primary: #ffffff;
+  --ink-button: #000000;
+  --on-ink-button: #ffffff;
+  --fb-blue: #1876f2;
+  --meta-link: #385898;
+  --oculus-purple: #a121ce;
+  --success: #31a24c;
+  --success-bg: #24e400;
+  --attention: #f2a918;
+  --warning: #f7b928;
+  --warning-bg: #ffe200;
+  --critical: #e41e3f;
+  --critical-strong: #f0284a;
+  --canvas: #ffffff;
+  --surface-soft: #f1f4f7;
+  --ink-deep: #0a1317;
+  --ink: #1c1e21;
+  --charcoal: #444950;
+  --slate: #4b4c4f;
+  --steel: #5d6c7b;
+  --stone: #8595a4;
+  --hairline: #ced0d4;
+  --hairline-soft: #dee3e9;
+  --disabled-text: #bcc0c4;
+}
+
+@theme {
+  --color-primary: var(--primary);
+  --color-primary-deep: var(--primary-deep);
+  --color-primary-soft: var(--primary-soft);
+  --color-on-primary: var(--on-primary);
+  --color-ink-button: var(--ink-button);
+  --color-on-ink-button: var(--on-ink-button);
+  --color-fb-blue: var(--fb-blue);
+  --color-meta-link: var(--meta-link);
+  --color-oculus-purple: var(--oculus-purple);
+  --color-success: var(--success);
+  --color-success-bg: var(--success-bg);
+  --color-attention: var(--attention);
+  --color-warning: var(--warning);
+  --color-warning-bg: var(--warning-bg);
+  --color-critical: var(--critical);
+  --color-critical-strong: var(--critical-strong);
+  --color-canvas: var(--canvas);
+  --color-surface-soft: var(--surface-soft);
+  --color-ink-deep: var(--ink-deep);
+  --color-ink: var(--ink);
+  --color-charcoal: var(--charcoal);
+  --color-slate: var(--slate);
+  --color-steel: var(--steel);
+  --color-stone: var(--stone);
+  --color-hairline: var(--hairline);
+  --color-hairline-soft: var(--hairline-soft);
+  --color-disabled-text: var(--disabled-text);
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
   margin: 0;
-  background: #fff;
+  background: var(--canvas);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }

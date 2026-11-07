@@ -1,5 +1,23 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Auth0 setup
+
+The app uses Auth0 Universal Login with an email/password database connection.
+Login and signup are pinned to that connection, so social providers are not
+offered by this app.
+
+1. In Auth0, create a **Regular Web Application** and enable an email/password
+   database connection. Set the connection's login identifier to **Email** and
+   choose the **Good** or **Excellent** password policy in its settings.
+2. Copy `.env.example` to `.env.local` and fill in the tenant domain, client ID,
+   and client secret. Generate `AUTH0_SECRET` with `openssl rand -hex 32`.
+   Set `AUTH0_DB_CONNECTION` to the exact name of your database connection.
+3. In the Auth0 app settings, add `http://localhost:3000/auth/callback` to
+   **Allowed Callback URLs** and `http://localhost:3000` to **Allowed Logout
+   URLs** and **Allowed Web Origins**.
+4. Restart the app with `npm run dev`. The header provides sign-in, signup, and
+   sign-out actions.
+
 ## Getting Started
 
 First, run the development server:
