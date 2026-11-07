@@ -25,7 +25,7 @@ export default function Home() {
   }
 
   return (
-    <main className="mx-auto max-w-[1280px] px-5 text-[#0a1317] sm:px-8 lg:px-12">
+    <main className="mx-auto max-w-7xl px-5 text-[#0a1317] sm:px-8 lg:px-12">
       <header className="flex h-20 items-center justify-between border-b border-[#dee3e9]">
         <a className="flex items-center gap-2 text-xl font-bold tracking-tight" href="#top" aria-label="Forme home">
           <span className="grid size-8 place-items-center rounded-full bg-[#0064e0] text-white">f.</span> forme
@@ -43,13 +43,13 @@ export default function Home() {
           <h1 className="mt-6 max-w-xl text-5xl font-medium leading-[1.12] tracking-normal sm:text-[64px]">Good things deserve a second look.</h1>
           <p className="mt-6 max-w-lg text-base leading-7 text-[#444950]">Find pre-loved pieces worth keeping. Explore each find in 3D and take a closer look before it finds a new home.</p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
-            <a className="rounded-full bg-black px-[30px] py-3.5 text-sm font-bold text-white" href="#discover">Explore the marketplace ↗</a>
+            <a className="rounded-full bg-black px-7.5 py-3.5 text-sm font-bold text-white" href="#discover">Explore the marketplace ↗</a>
             <a className="rounded-full border-2 border-[#0a1317] px-7 py-3 text-sm font-bold" href="#how-it-works">How it works</a>
           </div>
           <p className="mt-8 text-sm text-[#5d6c7b]"><strong className="text-[#0a1317]">2,400+</strong> good things found a new home</p>
         </div>
 
-        <div className="relative grid min-h-80 place-items-center overflow-hidden rounded-[32px] bg-[#f1f4f7] sm:min-h-[30rem]">
+        <div className="relative grid min-h-80 place-items-center overflow-hidden rounded-4xl bg-[#f1f4f7] sm:min-h-120">
           <span className="absolute left-5 top-5 rounded-full bg-white px-4 py-2.5 text-[10px] font-bold tracking-widest text-[#444950]">● INTERACTIVE 3D</span>
           <span className="text-[9rem] sm:text-[12rem]" aria-hidden="true">🪑</span>
           <div className="absolute inset-x-5 bottom-5 flex items-center justify-between rounded-2xl bg-white p-5">
@@ -75,8 +75,8 @@ export default function Home() {
           <input className="w-full rounded-full bg-[#f1f4f7] px-5 py-3 text-sm text-[#1c1e21] outline-none focus:ring-2 focus:ring-[#0064e0] sm:w-72" aria-label="Search listings" placeholder="Search the marketplace" type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
         </div>
         <div id="listings" className="mt-7 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {visibleListings.map((item) => <article key={item.id} className="overflow-hidden rounded-[24px] bg-white">
-            <div className={`relative grid aspect-square place-items-center rounded-[24px] ${item.color}`}>
+          {visibleListings.map((item) => <article key={item.id} className="overflow-hidden rounded-3xl bg-white">
+            <div className={`relative grid aspect-square place-items-center rounded-3xl ${item.color}`}>
               <span className="absolute left-3 top-3 rounded-full bg-white px-3 py-1.5 text-[9px] font-bold tracking-wider text-[#444950]">{item.tag}</span>
               <span className="text-7xl" aria-hidden="true">{item.emoji}</span>
               <span className="absolute bottom-3 right-3 rounded-full bg-white px-3 py-1.5 text-[10px] font-bold tracking-wider">↗ VIEW IN 3D</span>
@@ -90,9 +90,9 @@ export default function Home() {
         {visibleListings.length === 0 && <p className="py-16 text-center text-[#5d6c7b]">No finds match that search. Try another category or search term.</p>}
       </section>
 
-      <section id="sell" className="mb-12 flex flex-col items-start justify-between gap-6 rounded-[32px] bg-[#0a1317] p-8 text-white sm:flex-row sm:items-center sm:p-12">
+      <section id="sell" className="mb-12 flex flex-col items-start justify-between gap-6 rounded-4xl bg-[#0a1317] p-8 text-white sm:flex-row sm:items-center sm:p-12">
         <div><p className="text-xs font-bold tracking-widest text-white/70">GOT SOMETHING GOOD?</p><h2 className="mt-2 text-2xl font-medium">Give it a new point of view.</h2><p className="mt-2 text-sm text-white/75">List your piece and give it a new home.</p></div>
-        <a className="rounded-full bg-white px-[30px] py-3.5 text-sm font-bold text-[#0a1317]" href="mailto:hello@forme.market">List an item ↗</a>
+        <a className="rounded-full bg-white px-7.5 py-3.5 text-sm font-bold text-[#0a1317]" href="mailto:hello@forme.market">List an item ↗</a>
       </section>
 
       <footer id="how-it-works" className="flex flex-col gap-2 border-t border-[#dee3e9] py-8 text-sm text-[#5d6c7b] sm:flex-row sm:items-center sm:justify-between">
