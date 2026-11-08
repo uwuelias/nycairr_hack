@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5000";
+const API = "/api/negotiation"; // keep it exposed; no point in keeping it in an .env
 const SAVED_KEY = "forme.negotiations";
 
 type Role = "buyer" | "seller";
@@ -26,7 +26,7 @@ function storeSaved(list: Saved[]) {
 }
 
 async function api(path: string, token?: string, body?: unknown, method = body === undefined ? "GET" : "POST") {
-  const res = await fetch(`${API}/api${path}`, {
+  const res = await fetch(`${API}${path}`, {
     method,
     headers: { "Content-Type": "application/json", ...(token ? { "X-Session-Token": token } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -105,7 +105,7 @@ export default function NegotiateClient() {
   return (
     <main className="mx-auto grid w-full max-w-6xl gap-6 px-5 py-8 text-ink-deep sm:px-8 lg:grid-cols-[280px_1fr]">
       <aside className="flex flex-col gap-4">
-        <Link href="/" className="text-sm font-bold">← forme</Link>
+        <Link href="/" className="text-sm font-bold">← JBay</Link>
         <form action={create} className="flex flex-col gap-2 rounded-3xl bg-surface-soft p-4 text-sm">
           <p className="font-bold">New negotiation</p>
           <input name="category" defaultValue="phones" className="rounded-full bg-canvas px-4 py-2" aria-label="Category" />
