@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { MarketplaceListing } from "@/lib/listing-store";
 import { formatMarketplaceCondition } from "@/lib/marketplace-filters";
@@ -49,13 +50,24 @@ export default function ListingCard({ listing }: { listing: MarketplaceListing }
         className="group block h-full rounded-3xl border border-hairline bg-surface-card p-5 transition-shadow hover:shadow-[0_4px_12px_rgba(0,0,0,0.04)]"
         href={`/marketplace/${encodeURIComponent(listing.routeId)}`}
       >
-        <div className="grid aspect-[4/3] place-items-center rounded-2xl bg-surface-soft">
-          <span
-            className="grid size-24 place-items-center rounded-full bg-surface-strong text-5xl"
-            aria-hidden="true"
-          >
-            {getCategoryGlyph(listing.category)}
-          </span>
+        <div className="relative grid aspect-[4/3] place-items-center overflow-hidden rounded-2xl bg-surface-soft">
+          {listing.imageUrl ? (
+            <Image
+              alt={listing.title}
+              className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+              src={listing.imageUrl}
+              unoptimized
+            />
+          ) : (
+            <span
+              className="grid size-24 place-items-center rounded-full bg-surface-strong text-5xl"
+              aria-hidden="true"
+            >
+              {getCategoryGlyph(listing.category)}
+            </span>
+          )}
         </div>
         <div className="pt-5">
           <div className="flex items-center justify-between gap-3">
@@ -67,6 +79,9 @@ export default function ListingCard({ listing }: { listing: MarketplaceListing }
           <h2 className="mt-4 line-clamp-2 min-h-12 text-base font-semibold leading-snug text-ink group-hover:text-primary">
             {listing.title}
           </h2>
+          {listing.sellerUsername && (
+            <p className="mt-2 truncate text-xs text-body">Sold by {listing.sellerUsername}</p>
+          )}
           <div className="mt-4 flex items-end justify-between gap-3 border-t border-hairline-soft pt-4">
             <div className="min-w-0 text-sm text-body">
               {listing.brand && <span>{listing.brand}</span>}

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { io } from "next/cache";
@@ -72,9 +73,21 @@ async function ListingDetailsContent({ params }: { params: Promise<{ id: string 
           <span className="absolute left-5 top-5 rounded-full bg-canvas px-3 py-1.5 text-xs font-semibold text-body">
             {category ?? "Technology"}
           </span>
-          <span className="grid size-40 place-items-center rounded-full bg-surface-strong text-8xl sm:size-48 sm:text-9xl" aria-hidden="true">
-            {getCategoryGlyph(listing.category)}
-          </span>
+          {listing.imageUrl ? (
+            <Image
+              alt={listing.title}
+              className="object-cover"
+              fill
+              priority
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              src={listing.imageUrl}
+              unoptimized
+            />
+          ) : (
+            <span className="grid size-40 place-items-center rounded-full bg-surface-strong text-8xl sm:size-48 sm:text-9xl" aria-hidden="true">
+              {getCategoryGlyph(listing.category)}
+            </span>
+          )}
           <figcaption className="absolute inset-x-4 bottom-4 rounded-2xl bg-canvas p-4 text-center text-sm text-body sm:inset-x-6 sm:bottom-6 sm:p-5">
             3D product preview coming soon
           </figcaption>
@@ -88,6 +101,9 @@ async function ListingDetailsContent({ params }: { params: Promise<{ id: string 
           <p className="mt-5 font-mono text-2xl font-medium text-ink sm:text-3xl">
             {formatPrice(listing.price)}
           </p>
+          {listing.sellerUsername && (
+            <p className="mt-3 text-sm text-body">Sold by <span className="font-semibold text-ink">{listing.sellerUsername}</span></p>
+          )}
 
           {listing.description?.trim() && (
             <section className="mt-8">

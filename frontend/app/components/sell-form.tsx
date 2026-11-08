@@ -3,29 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
-
-const categories = [
-  ["phones", "Phones"],
-  ["tablets", "Tablets"],
-  ["laptops", "Laptops"],
-  ["game_consoles", "Game consoles"],
-  ["gpus", "Graphics cards"],
-  ["headphones", "Headphones"],
-  ["cameras", "Cameras"],
-  ["monitors", "Monitors"],
-  ["peripherals", "Computer accessories"],
-  ["smartwatches", "Smartwatches"],
-  ["speakers", "Speakers"],
-  ["audio_players", "Audio players"],
-];
-
-const conditions = [
-  ["new", "New"],
-  ["like_new", "Like-new"],
-  ["good", "Good"],
-  ["fair", "Fair"],
-  ["poor", "Poor"],
-];
+import { MARKETPLACE_CATEGORIES, SELLING_CONDITIONS } from "@/lib/marketplace-options";
 
 type ListingPhoto = { id: string; file: File; previewUrl: string };
 
@@ -33,7 +11,10 @@ export default function SellForm() {
   const [photos, setPhotos] = useState<ListingPhoto[]>([]);
   const [photoError, setPhotoError] = useState("");
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
   const previewUrls = useRef(new Set<string>());
+  const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => () => {
     previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
@@ -82,17 +63,45 @@ export default function SellForm() {
     setPhotos((current) => current.filter((item) => item.id !== photo.id));
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSubmitError("");
+    setSubmitted(false);
     if (photos.length === 0) {
       setPhotoError("Add at least one photo to continue.");
       return;
     }
-    setSubmitted(true);
+
+    setPhotoError("");
+    setSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+    photos.forEach(({ file }) => formData.append("photos", file));
+
+    try {
+      const response = await fetch("/api/listings", {
+        method: "POST",
+        body: formData,
+      });
+      const result = await response.json() as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error ?? "We couldn't submit your listing. Please try again.");
+      }
+
+      formRef.current?.reset();
+      previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
+      previewUrls.current.clear();
+      setPhotos([]);
+      setPhotoError("");
+      setSubmitted(true);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "We couldn't submit your listing. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
-    <form className="space-y-6" onSubmit={handleSubmit}>
+    <form ref={formRef} className="space-y-6" onSubmit={handleSubmit}>
       <div className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
         <section className="rounded-3xl border border-hairline bg-canvas p-5 sm:p-7" aria-labelledby="photos-heading">
           <div>
@@ -173,7 +182,7 @@ export default function SellForm() {
                   required
                 >
                   <option disabled value="">Select category</option>
-                  {categories.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  {MARKETPLACE_CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
               <label className="block text-sm font-medium text-ink">
@@ -185,7 +194,7 @@ export default function SellForm() {
                   required
                 >
                   <option disabled value="">Select condition</option>
-                  {conditions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  {SELLING_CONDITIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                 </select>
               </label>
             </div>
@@ -224,20 +233,21 @@ export default function SellForm() {
 
       {submitted && (
         <div className="rounded-2xl border border-hairline bg-canvas px-5 py-4 text-sm text-body" role="status" aria-live="polite">
-          Your listing details and photos are ready to review. Publishing is not connected yet.
-          <button className="ml-2 font-semibold text-primary" onClick={() => setSubmitted(false)} type="button">Edit listing</button>
+          Your listing has been posted.
         </div>
       )}
+
+      {submitError && <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-semantic-down" role="alert">{submitError}</p>}
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link className="inline-flex h-11 items-center justify-center rounded-full bg-surface-strong px-5 text-sm font-semibold text-ink" href="/marketplace">
           Cancel
         </Link>
-        <button className="inline-flex h-12 items-center justify-center rounded-full bg-primary px-7 text-sm font-semibold text-on-primary" type="submit">
-          Review listing
+        <button className="inline-flex h-12 items-center justify-center rounded-full bg-primary px-7 text-sm font-semibold text-on-primary disabled:cursor-wait disabled:opacity-60" disabled={submitting} type="submit">
+          {submitting ? "Submitting…" : "Submit listing"}
         </button>
       </div>
-      <p className="text-right text-xs text-body">Photos stay in this browser until listing storage is connected.</p>
+      <p className="text-right text-xs text-body">Your listing and photos will be saved to the marketplace.</p>
     </form>
   );
 }

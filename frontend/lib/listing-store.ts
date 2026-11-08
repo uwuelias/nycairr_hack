@@ -13,6 +13,8 @@ export type MarketplaceListing = {
   listedDate: string | null;
   brand: string | null;
   model: string | null;
+  imageUrl: string | null;
+  sellerUsername: string | null;
 };
 
 export type MarketplaceListingDetail = MarketplaceListing & {
@@ -32,7 +34,7 @@ function getDatabase() {
 
   const databasePath = resolve(
     process.cwd(),
-    process.env.APP_DATABASE_PATH ?? "../backend/data/listing.db",
+    process.env.MARKETPLACE_DATABASE_PATH ?? "../backend/databases/marketplace.db",
   );
   const database = new Database(databasePath, {
     readonly: true,
@@ -46,7 +48,7 @@ function getDatabase() {
 
 const MARKETPLACE_PAGE_SIZE = 30;
 
-/** Search active asking listings in pages of 30 newest results. */
+/** Search active listings and return the first attached image for each item. */
 export function searchMarketplaceListings(
   search = "",
   page = 1,
@@ -62,12 +64,12 @@ export function searchMarketplaceListings(
   const offset = (page - 1) * MARKETPLACE_PAGE_SIZE;
   const selectedConditions = filters.conditions ?? [];
   const conditionFilter = selectedConditions.length
-    ? `AND condition IN (${selectedConditions.map((_, index) => `@condition${index}`).join(", ")})`
+    ? `AND item_condition IN (${selectedConditions.map((_, index) => `@condition${index}`).join(", ")})`
     : "";
   const sortOrder = {
-    newest: "listedDate DESC, fetchedAt DESC, id ASC",
-    price_low_high: "price ASC, listedDate DESC, fetchedAt DESC, id ASC",
-    price_high_low: "price DESC, listedDate DESC, fetchedAt DESC, id ASC",
+    newest: "item_created_at DESC, item_id ASC",
+    price_low_high: "price ASC, item_created_at DESC, item_id ASC",
+    price_high_low: "price DESC, item_created_at DESC, item_id ASC",
   }[filters.sort ?? "newest"];
   const bindings: Record<string, string | number | null> = {
     query,
@@ -80,69 +82,61 @@ export function searchMarketplaceListings(
     bindings[`condition${index}`] = condition;
   });
 
-  const rows = database
-    .prepare(`
-      WITH latest_observations AS (
-        SELECT
-          listing.source_item_id AS id,
-          listing.source,
-          listing.title,
-          listing.price,
-          listing.price_type AS priceType,
-          listing.category,
-          listing.condition,
-          listing.listed_date AS listedDate,
-          listing.fetched_at AS fetchedAt,
-          listing.brand,
-          listing.model,
-          ROW_NUMBER() OVER (
-            PARTITION BY listing.source, listing.source_item_id
-            ORDER BY listing.fetched_at DESC, listing.id DESC
-          ) AS observationRank
-        FROM price_observations AS listing
+  const rows = database.prepare(`
+    SELECT
+      item.item_id AS id,
+      item.title,
+      item.price,
+      category.category_id AS category,
+      item.item_condition AS condition,
+      item.created_at AS listedDate,
+      seller.username AS sellerUsername,
+      NULL AS brand,
+      NULL AS model,
+      (
+        SELECT image.image_url
+        FROM item_images AS image
+        WHERE image.item_id = item.item_id
+        ORDER BY image.display_order ASC
+        LIMIT 1
+      ) AS imageUrl,
+      item.created_at AS item_created_at,
+      COUNT(*) OVER () AS totalCount
+    FROM items AS item
+    LEFT JOIN categories AS category ON category.category_id = item.category_id
+    LEFT JOIN users AS seller ON seller.user_id = item.seller_id
+    WHERE item.status = 'active'
+      AND (
+        @query = '' OR
+        instr(lower(item.title), lower(@query)) > 0 OR
+        instr(lower(COALESCE(item.description, '')), lower(@query)) > 0 OR
+        instr(lower(COALESCE(category.category_name, '')), lower(@query)) > 0
       )
-      SELECT
-        id,
-        source,
-        title,
-        price,
-        category,
-        condition,
-        listedDate,
-        brand,
-        model,
-        COUNT(*) OVER () AS totalCount
-      FROM latest_observations
-      WHERE observationRank = 1
-        AND priceType = 'asking'
-        AND (
-          @query = '' OR
-          instr(lower(title), lower(@query)) > 0 OR
-          instr(lower(category), lower(@query)) > 0 OR
-          instr(lower(COALESCE(brand, '')), lower(@query)) > 0 OR
-          instr(lower(COALESCE(model, '')), lower(@query)) > 0
-        )
-        AND (@minPrice IS NULL OR price >= @minPrice)
-        AND (@maxPrice IS NULL OR price <= @maxPrice)
-        ${conditionFilter}
-      ORDER BY ${sortOrder}
-      LIMIT @limit OFFSET @offset
-    `)
-    .all(bindings) as (Omit<MarketplaceListing, "routeId"> & { totalCount: number })[];
+      AND (@minPrice IS NULL OR item.price >= @minPrice)
+      AND (@maxPrice IS NULL OR item.price <= @maxPrice)
+      ${conditionFilter}
+    ORDER BY ${sortOrder}
+    LIMIT @limit OFFSET @offset
+  `).all(bindings) as (Omit<MarketplaceListing, "routeId" | "source"> & {
+    totalCount: number;
+    item_created_at: string;
+  })[];
 
   const hasNextPage = rows.length > MARKETPLACE_PAGE_SIZE;
   const totalCount = rows[0]?.totalCount ?? 0;
   const listings = rows.slice(0, MARKETPLACE_PAGE_SIZE).map((listing) => ({
     id: listing.id,
-    routeId: `${listing.source}~${listing.id}`,
-    source: listing.source,
     title: listing.title,
     price: listing.price,
     category: listing.category,
     condition: listing.condition,
     listedDate: listing.listedDate,
+    sellerUsername: listing.sellerUsername,
     brand: listing.brand,
     model: listing.model,
+    imageUrl: listing.imageUrl,
+    source: "jbay",
+    routeId: `jbay~${listing.id}`,
   }));
 
   return {
@@ -152,60 +146,40 @@ export function searchMarketplaceListings(
   };
 }
 
-/** Find the latest asking observation for one source item. */
-export function getMarketplaceListingByRouteId(
-  routeId: string,
-): MarketplaceListingDetail | null {
+/** Find an active marketplace item by its app route id. */
+export function getMarketplaceListingByRouteId(routeId: string): MarketplaceListingDetail | null {
   const separator = routeId.indexOf("~");
   if (separator <= 0 || separator === routeId.length - 1) return null;
 
   const source = routeId.slice(0, separator);
   const id = routeId.slice(separator + 1);
-  const database = getDatabase();
-  const columns = database.pragma("table_info(price_observations)") as {
-    name: string;
-  }[];
-  const descriptionColumn = columns.some((column) => column.name === "description")
-    ? "listing.description"
-    : "NULL";
+  if (source !== "jbay") return null;
 
-  const row = database
-    .prepare(`
-      WITH latest_observations AS (
-        SELECT
-          listing.source_item_id AS id,
-          listing.source,
-          listing.title,
-          listing.price,
-          listing.price_type AS priceType,
-          listing.category,
-          listing.condition,
-          listing.listed_date AS listedDate,
-          listing.fetched_at AS fetchedAt,
-          listing.brand,
-          listing.model,
-          ${descriptionColumn} AS description,
-          ROW_NUMBER() OVER (
-            PARTITION BY listing.source, listing.source_item_id
-            ORDER BY listing.fetched_at DESC, listing.id DESC
-          ) AS observationRank
-        FROM price_observations AS listing
-      )
-      SELECT id, source, title, price, category, condition, listedDate,
-        brand, model, description
-      FROM latest_observations
-      WHERE observationRank = 1
-        AND priceType = 'asking'
-        AND source = @source
-        AND id = @id
-      LIMIT 1
-    `)
-    .get({ source, id }) as Omit<MarketplaceListingDetail, "routeId"> | undefined;
+  const row = getDatabase().prepare(`
+    SELECT
+      item.item_id AS id,
+      item.title,
+      item.price,
+      category.category_id AS category,
+      item.item_condition AS condition,
+      item.created_at AS listedDate,
+      seller.username AS sellerUsername,
+      NULL AS brand,
+      NULL AS model,
+      item.description,
+      (
+        SELECT image.image_url
+        FROM item_images AS image
+        WHERE image.item_id = item.item_id
+        ORDER BY image.display_order ASC
+        LIMIT 1
+      ) AS imageUrl
+    FROM items AS item
+    LEFT JOIN categories AS category ON category.category_id = item.category_id
+    LEFT JOIN users AS seller ON seller.user_id = item.seller_id
+    WHERE item.item_id = @id AND item.status = 'active'
+    LIMIT 1
+  `).get({ id }) as Omit<MarketplaceListingDetail, "routeId" | "source"> | undefined;
 
-  if (!row) return null;
-
-  return {
-    ...row,
-    routeId,
-  };
+  return row ? { ...row, source: "jbay", routeId } : null;
 }
