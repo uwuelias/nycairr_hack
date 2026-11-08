@@ -70,6 +70,15 @@ function ensureMarketplaceSchema(database: Database.Database): void {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (item_id, display_order)
     );
+    CREATE TABLE IF NOT EXISTS listing_negotiation_inbox (
+      session_id TEXT PRIMARY KEY NOT NULL,
+      seller_id TEXT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+      seller_token TEXT NOT NULL,
+      listing_title TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS listing_negotiation_seller_created_idx
+      ON listing_negotiation_inbox(seller_id, created_at DESC);
   `);
 
   migrateUsersForAuth0(database);

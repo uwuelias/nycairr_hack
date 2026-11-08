@@ -7,6 +7,7 @@ import { formatMarketplaceCondition } from "@/lib/marketplace-filters";
 import SiteFooter from "@/app/components/footer";
 import SiteNavbar from "@/app/components/navbar";
 import ListingGallery from "./listing-gallery";
+import BrowsingChat from "@/app/components/browsing-chat";
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat("en-US", {
@@ -58,6 +59,7 @@ async function ListingDetailsContent({ params }: { params: Promise<{ id: string 
   const condition = formatMarketplaceCondition(listing.condition);
   const category = formatLabel(listing.category);
   const listedDate = formatListedDate(listing.listedDate);
+  const hasIPhone13ProModel = listing.category === "phones" && /\biphone\s*13\s*pro\b(?!\s*max)/i.test(listing.title);
 
   return (
     <>
@@ -72,6 +74,7 @@ async function ListingDetailsContent({ params }: { params: Promise<{ id: string 
           title={listing.title}
           category={category ?? "Technology"}
           imageUrls={listing.imageUrls.length ? listing.imageUrls : listing.imageUrl ? [listing.imageUrl] : []}
+        modelSrc={hasIPhone13ProModel ? "/models/iphone_13_pro.glb" : undefined}
         />
 
         <article className="flex flex-col pt-2 lg:pt-8">
@@ -83,7 +86,7 @@ async function ListingDetailsContent({ params }: { params: Promise<{ id: string 
             {formatPrice(listing.price)}
           </p>
           {listing.sellerUsername && (
-            <p className="mt-3 text-sm text-body">Sold by <span className="font-semibold text-ink">{listing.sellerUsername}</span></p>
+            <p className="mt-3 text-sm text-body">Seller: <span className="font-semibold text-ink">{listing.sellerUsername}</span></p>
           )}
 
           {listing.description?.trim() && (
@@ -130,10 +133,10 @@ async function ListingDetailsContent({ params }: { params: Promise<{ id: string 
               Buy Now
             </button>
             <Link
-              href="/negotiate"
+              href={`/negotiate?listingId=${encodeURIComponent(listing.routeId)}`}
               className="inline-flex min-h-12 items-center justify-center rounded-full border border-hairline px-6 py-3 text-sm font-semibold text-ink transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
             >
-              Negotiate
+              Chat with seller
             </Link>
           </div>
 
@@ -142,6 +145,15 @@ async function ListingDetailsContent({ params }: { params: Promise<{ id: string 
           </Link>
         </article>
       </section>
+      <BrowsingChat currentListing={{
+        routeId: listing.routeId,
+        title: listing.title,
+        price: listing.price,
+        imageUrl: listing.imageUrl,
+        description: listing.description,
+        category: listing.category,
+        condition: listing.condition,
+      }} />
     </>
   );
 }

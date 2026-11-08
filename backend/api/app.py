@@ -6,7 +6,7 @@ offers, chat, approvals) lives in agents/negotiation/sessions.db, so it survives
 
 Run from the backend/ folder:   python -m api.app
 """
-import json, math, os
+import collections, json, math, os, re
 from datetime import datetime
 
 from flask import Flask, jsonify, request
@@ -17,6 +17,7 @@ import agents.negotiation.store as store
 from agents.negotiation.alternating import negotiate
 from agents.research.pricing import research
 from agents.research.schema import ListingQuery
+from services.run_logging import REVIEW_LOG, RUN_DIR
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LISTING_DB = os.path.join(BACKEND_DIR, "data", "listing.db")
@@ -40,6 +41,199 @@ def create_app(market_engine=None):
     def body():
         return request.get_json(silent=True) or {}
 
+    def evaluation_runs():
+        if not RUN_DIR.exists():
+            return []
+        runs = []
+        for path in sorted(RUN_DIR.glob("claims_*.json"), reverse=True):
+            try:
+                record = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if isinstance(record, dict):
+                runs.append((path, record))
+        return runs
+
+    def evaluation_reviews():
+        if not REVIEW_LOG.exists():
+            return []
+        entries = []
+        with REVIEW_LOG.open(encoding="utf-8") as review_file:
+            for line in review_file:
+                if not line.strip():
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(entry, dict):
+                    entries.append(entry)
+        return entries
+
+    def evaluation_claims(record, key):
+        section = record.get(key) or {}
+        return section.get("claims", []) if isinstance(section, dict) else []
+
+    def evaluation_category(record):
+        for claim in evaluation_claims(record, "normalized"):
+            if claim.get("attribute") == "category" and claim.get("value"):
+                return str(claim["value"]).strip().lower()
+        return "unknown"
+
+    def asserted_model(claims):
+        return any(
+            claim.get("attribute") == "model"
+            and claim.get("status") in {"observed", "inferred"}
+            and claim.get("value")
+            for claim in claims
+        )
+
+    def summarize_reviews(entries):
+        by_attribute = collections.defaultdict(collections.Counter)
+        by_category = collections.defaultdict(collections.Counter)
+        totals = collections.Counter()
+        for entry in entries:
+            decision = entry.get("decision")
+            if decision not in {"accepted", "rejected", "supplied"}:
+                continue
+            totals[decision] += 1
+            by_attribute[entry.get("attribute") or "unknown"][decision] += 1
+            by_category[entry.get("category") or "unknown"][decision] += 1
+
+        def rows(groups):
+            output = []
+            for key, counts in sorted(groups.items()):
+                decided = counts["accepted"] + counts["rejected"]
+                output.append({
+                    "key": key,
+                    "accepted": counts["accepted"],
+                    "rejected": counts["rejected"],
+                    "seller_supplied": counts["supplied"],
+                    "rejection_rate": round(counts["rejected"] / decided, 4) if decided else None,
+                })
+            return output
+
+        return {
+            "totals": {key: totals[key] for key in ("accepted", "rejected", "supplied")},
+            "by_attribute": rows(by_attribute),
+            "by_category": rows(by_category),
+        }
+
+    @app.get("/api/evaluation/summary")
+    def evaluation_summary():
+        runs = evaluation_runs()
+        reviews = evaluation_reviews()
+        statuses = ("observed", "inferred", "unknown", "requires_user_confirmation", "seller_confirmed")
+        status_counts = {
+            source: collections.Counter(
+                claim.get("status")
+                for _, record in runs
+                for claim in evaluation_claims(record, source)
+            )
+            for source in ("raw_model_output", "normalized")
+        }
+        actions = collections.Counter(
+            correction.get("action")
+            for _, record in runs
+            for correction in record.get("corrections", [])
+            if correction.get("action")
+        )
+        seconds = [record["seconds"] for _, record in runs if isinstance(record.get("seconds"), (int, float))]
+        categories = collections.defaultdict(list)
+        for _, record in runs:
+            categories[evaluation_category(record)].append(record)
+
+        by_category = []
+        for category, group in sorted(categories.items()):
+            raw_observed = sum(
+                claim.get("status") == "observed"
+                for record in group for claim in evaluation_claims(record, "raw_model_output")
+            )
+            guarded_observed = sum(
+                claim.get("status") == "observed"
+                for record in group for claim in evaluation_claims(record, "normalized")
+            )
+            by_category.append({
+                "category": category,
+                "runs": len(group),
+                "corrections_per_run": round(sum(len(r.get("corrections", [])) for r in group) / len(group), 2),
+                "observed_claims_raw": raw_observed,
+                "observed_claims_after_guards": guarded_observed,
+            })
+
+        raw_model_runs = sum(asserted_model(evaluation_claims(record, "raw_model_output")) for _, record in runs)
+        guarded_model_runs = sum(asserted_model(evaluation_claims(record, "normalized")) for _, record in runs)
+        return jsonify({
+            "run_count": len(runs),
+            "average_seconds": round(sum(seconds) / len(seconds), 2) if seconds else None,
+            "claim_status_counts": {
+                source: {status: count[status] for status in statuses}
+                for source, count in status_counts.items()
+            },
+            "guard_interventions": [
+                {"action": action, "count": count, "per_run": round(count / len(runs), 2) if runs else 0}
+                for action, count in actions.most_common()
+            ],
+            "model_identification": {
+                "runs_asserting_model": raw_model_runs,
+                "ocr_corroborated": actions["model_corroborated_by_ocr"],
+                "unsupported_model_downgrades": actions["downgraded_unverified_model"],
+                "runs_asserting_model_after_guards": guarded_model_runs,
+            },
+            "by_category": by_category,
+            "seller_reviews": summarize_reviews(reviews),
+        })
+
+    @app.get("/api/evaluation/runs")
+    def evaluation_run_list():
+        try:
+            limit = min(max(int(request.args.get("limit", 50)), 1), 100)
+            offset = max(int(request.args.get("offset", 0)), 0)
+        except ValueError:
+            return err("limit and offset must be integers.", 400)
+        category_filter = request.args.get("category", "").strip().lower()
+        runs = []
+        for path, record in evaluation_runs():
+            category = evaluation_category(record)
+            if category_filter and category != category_filter:
+                continue
+            raw = evaluation_claims(record, "raw_model_output")
+            normalized = evaluation_claims(record, "normalized")
+            runs.append({
+                "run_id": path.stem,
+                "kind": record.get("kind", "claims"),
+                "timestamp": record.get("timestamp"),
+                "seconds": record.get("seconds"),
+                "category": category,
+                "image_count": len(record.get("images", [])),
+                "correction_count": len(record.get("corrections", [])),
+                "model_asserted": asserted_model(raw),
+                "model_asserted_after_guards": asserted_model(normalized),
+            })
+        return jsonify({"runs": runs[offset:offset + limit], "total": len(runs), "limit": limit, "offset": offset})
+
+    @app.get("/api/evaluation/runs/<run_id>")
+    def evaluation_run_detail(run_id):
+        if not re.fullmatch(r"claims_[A-Za-z0-9_-]+", run_id):
+            return err("Run not found.", 404)
+        try:
+            record = json.loads((RUN_DIR / f"{run_id}.json").read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return err("Run not found.", 404)
+        if not isinstance(record, dict):
+            return err("Run not found.", 404)
+        return jsonify({**record, "run_id": run_id})
+
+    @app.get("/api/evaluation/reviews")
+    def evaluation_review_list():
+        try:
+            limit = min(max(int(request.args.get("limit", 50)), 1), 100)
+            offset = max(int(request.args.get("offset", 0)), 0)
+        except ValueError:
+            return err("limit and offset must be integers.", 400)
+        reviews = list(reversed(evaluation_reviews()))
+        return jsonify({"reviews": reviews[offset:offset + limit], "total": len(reviews), "limit": limit, "offset": offset})
+
     @app.after_request
     def cors(resp):  # lets the Next.js dev server (port 3000) call this API
         resp.headers["Access-Control-Allow-Origin"] = FRONTEND_ORIGIN
@@ -50,6 +244,8 @@ def create_app(market_engine=None):
     def item_title(q: dict) -> str:
         """Title comes from OUR catalog, never from user-typed text.
         (condition is a validated enum, so it is safe to include.)"""
+        if q.get("listing_title"):
+            return q["listing_title"]
         with engine.connect() as c:
             row = c.execute(text("SELECT brand, model FROM price_observations "
                                  "WHERE lower(brand) = lower(:b) AND lower(model) = lower(:m) LIMIT 1"),
@@ -74,6 +270,8 @@ def create_app(market_engine=None):
             "item": json.loads(s["query"]), "price_report": json.loads(s["report"]),
             "you_submitted_bound": (s["buyer_max"] if role == "buyer" else s["seller_min"]) is not None,
             "other_submitted_bound": (s["seller_min"] if role == "buyer" else s["buyer_max"]) is not None,
+            "you_agent_enabled": bool(s.get("buyer_agent" if role == "buyer" else "seller_agent", 0)),
+            "other_agent_enabled": bool(s.get("seller_agent" if role == "buyer" else "buyer_agent", 0)),
             "both_submitted": both_in,
             "anchor": s["anchor"], "proposed_price": s["proposed_price"],
             "you_responded": None if mine is None else bool(mine),
@@ -94,6 +292,13 @@ def create_app(market_engine=None):
                 "text": f"The agents converged on ${result['price']:,.2f}. Both sides: approve or decline."}])
         store.log(s["id"], "agents", "negotiated")
 
+    def start_agents_if_ready(s):
+        if (s["buyer_max"] is None or s["seller_min"] is None or
+                not s.get("buyer_agent", 0) or not s.get("seller_agent", 0)):
+            return False
+        run_negotiation(s)
+        return True
+
     # ---------- routes ----------
     @app.get("/api/health")
     def health():
@@ -107,19 +312,64 @@ def create_app(market_engine=None):
             return err(e.errors(include_url=False, include_context=False).__repr__(), 422)
         return jsonify(research(engine, q, as_of=as_of).model_dump())
 
+    @app.post("/api/research/price-for-listing")
+    def price_for_listing():
+        """Resolve a marketplace title to a known model, then run the standard pricing research."""
+        payload = body()
+        title = payload.get("title")
+        category = payload.get("category")
+        condition = payload.get("condition")
+        if not isinstance(title, str) or not title.strip() or len(title) > 300:
+            return err("title must be a non-empty string of 300 characters or fewer", 422)
+        if not isinstance(category, str) or not category.strip() or len(category) > 80:
+            return err("category must be a non-empty string of 80 characters or fewer", 422)
+        if not isinstance(condition, str) or condition not in {"new", "like_new", "good", "fair", "poor"}:
+            return err("condition is required to estimate a fair price", 422)
+
+        def normalized(value):
+            return "".join(character.lower() for character in value if character.isalnum())
+
+        with engine.connect() as connection:
+            catalog = connection.execute(text(
+                "SELECT DISTINCT brand, model FROM price_observations "
+                "WHERE lower(category) = lower(:category)"
+            ), {"category": category.strip()}).all()
+
+        normalized_title = normalized(title)
+        matches = [row for row in catalog if normalized(row.model) in normalized_title]
+        if not matches:
+            return err("This listing title does not match a researched brand and model.", 404)
+        matches.sort(key=lambda row: (len(normalized(row.model)), normalized(row.brand) in normalized_title), reverse=True)
+        match = matches[0]
+        try:
+            query = ListingQuery.model_validate({
+                "category": category.strip(), "brand": match.brand,
+                "model": match.model, "condition": condition,
+            })
+        except ValidationError as e:
+            return err(e.errors(include_url=False, include_context=False).__repr__(), 422)
+        return jsonify(research(engine, query, as_of=as_of).model_dump())
+
     @app.post("/api/sessions")
     def create_session():
+        payload = body()
         try:
-            q = ListingQuery.model_validate(body().get("query"))
+            q = ListingQuery.model_validate(payload.get("query"))
         except ValidationError:
             return err("body must be {\"query\": {category, brand, model, condition, attributes}}", 422)
+        listing_title = payload.get("listing_title")
+        if listing_title is not None and (not isinstance(listing_title, str) or not listing_title.strip() or len(listing_title) > 120):
+            return err("listing_title must be a non-empty string of 120 characters or fewer", 422)
         report = research(engine, q, as_of=as_of).model_dump()   # ONE report, shared by both sides
-        s = store.create_session(q.model_dump(), report)
+        stored_query = q.model_dump()
+        if listing_title:
+            stored_query["listing_title"] = listing_title.strip()
+        s = store.create_session(stored_query, report)
         p50 = report.get("p50")
         market = f"Recent sales average ${p50:,.2f}." if p50 is not None else "Not enough recent sales data."
         store.add_messages(s["id"], [{"sender": "system", "text":
-            f"Negotiation opened for {item_title(q.model_dump())}. {market} "
-            "Both sides: submit your private limit to let the agents start."}])
+            f"Negotiation opened for {item_title(stored_query)}. {market} "
+            "Both sides: submit a private limit. You can opt in to agent negotiation or chat directly."}])
         return jsonify({"session_id": s["id"], "buyer_token": s["buyer_token"],
                         "seller_token": s["seller_token"], "price_report": report}), 201
 
@@ -147,16 +397,49 @@ def create_app(market_engine=None):
         if e:
             return e
         amount = body().get("amount")
+        use_agent = body().get("use_agent", False)
         if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not math.isfinite(amount) \
                 or not (0 < amount < 10_000_000):
             return err("amount must be a positive number", 422)
+        if not isinstance(use_agent, bool):
+            return err("use_agent must be true or false", 422)
         if not store.set_bound(sid, role, round(float(amount), 2)):
             return err("bound already submitted and cannot be changed", 409)
+        store.set_agent_enabled(sid, role, use_agent)
         store.log(sid, role, "bound_submitted")                # note: the amount is NOT logged
         store.add_messages(sid, [{"sender": "system", "text": f"The {role} submitted a private limit."}])
         s = store.get(sid)
-        if s["buyer_max"] is not None and s["seller_min"] is not None and s["status"] == "collecting_bounds":
-            run_negotiation(s)
+        feedback = None
+        if role == "buyer":
+            market_price = json.loads(s["report"]).get("p50")
+            if market_price is not None and amount < market_price * 0.5:
+                feedback = (f"That maximum is far below the recent sold-price average of "
+                            f"${market_price:,.2f}. The seller may be unlikely to accept it; "
+                            "consider raising your limit. This suggestion is private to you.")
+        if s["buyer_max"] is not None and s["seller_min"] is not None:
+            if not start_agents_if_ready(s):
+                store.update(sid, status="chatting")
+        response = view(store.get(sid), role)
+        if feedback:
+            response["bound_feedback"] = feedback
+        return jsonify(response)
+
+    @app.put("/api/sessions/<sid>/agent")
+    def toggle_agent(sid):
+        s, role, e = authed(sid)
+        if e:
+            return e
+        if s["status"] not in {"collecting_bounds", "chatting"}:
+            return err("agents can only be enabled before a negotiation proposal is made", 409)
+        enabled = body().get("enabled")
+        if not isinstance(enabled, bool):
+            return err("enabled must be true or false", 422)
+        store.set_agent_enabled(sid, role, enabled)
+        s = store.get(sid)
+        if s["buyer_max"] is not None and s["seller_min"] is not None:
+            if not start_agents_if_ready(s):
+                store.update(sid, status="chatting")
+        store.log(sid, role, "agent_enabled" if enabled else "agent_disabled")
         return jsonify(view(store.get(sid), role))
 
     @app.post("/api/sessions/<sid>/respond")

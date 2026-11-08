@@ -17,6 +17,13 @@ offered by this app.
    URLs** and **Allowed Web Origins**.
 4. Restart the app with `npm run dev`. The header provides sign-in, signup, and
    sign-out actions.
+5. The app reads the username from a `username` or `preferred_username` claim,
+   or from an Auth0 Action custom claim ending in `/username`. If your Action
+   uses a different custom claim key, set `AUTH0_USERNAME_CLAIM` to that exact
+   key in `.env.local`. As an optional fallback, a Machine to Machine
+   application authorized for the Auth0 Management API with `read:users` can
+   be configured with `AUTH0_MANAGEMENT_CLIENT_ID` and
+   `AUTH0_MANAGEMENT_CLIENT_SECRET`.
 
 To require a unique username during signup, open Auth0 Dashboard →
 Authentication → Database → `Username-Password-Authentication` and enable
@@ -26,8 +33,10 @@ claim to `users.username`, which also has a unique constraint in
 `marketplace.db`.
 
 After a successful login, the Auth0 callback upserts the user's Auth0 subject,
-email, name, picture, email-verification flag, and login timestamps into the
-`users` table in `../backend/databases/marketplace.db`. Auth0 identities map to
+username, email, name, and picture into the `users` table in
+`../backend/databases/marketplace.db`. If the login profile omits the username
+claim and Management API credentials are configured, the callback reads it
+from the Auth0 user profile. Auth0 identities map to
 the database's app-owned `user_id` through a unique `auth0_sub`; the Auth0
 password remains with Auth0. Seller listings are stored in `items`, and their
 photo URLs are stored in `item_images`. Set `MARKETPLACE_DATABASE_PATH` if the

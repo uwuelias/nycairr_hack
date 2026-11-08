@@ -9,12 +9,28 @@ type ChatMessage = {
   listings?: ListingResult[];
 };
 
-type ListingResult = { routeId: string; title: string; price: number; imageUrl: string | null };
+type ListingResult = { routeId: string; title: string; price: number; imageUrl: string | null; category: string };
+type PriceReport = {
+  query: { brand: string; model: string; condition: string };
+  p50: number | null;
+  n_sold: number;
+  confidence: "high" | "medium" | "low" | "insufficient";
+  basis: string;
+  caveats: string[];
+};
 
-export default function BrowsingChat() {
+export type BrowsingChatListing = ListingResult & {
+  description: string | null;
+  category: string;
+  condition: string | null;
+};
+
+export default function BrowsingChat({ currentListing }: { currentListing?: BrowsingChatListing }) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: "assistant", text: "Hi! Tell me what kind of tech you’re looking for." },
+    { role: "assistant", text: currentListing
+      ? `Hi! I see you’re viewing ${currentListing.title}. Ask me about this item or tell me what you’re comparing it with.`
+      : "Hi! Tell me what kind of tech you’re looking for." },
   ]);
   const [draft, setDraft] = useState("");
   const [isSearching, setIsSearching] = useState(false);
@@ -28,15 +44,67 @@ export default function BrowsingChat() {
     setDraft("");
     setIsSearching(true);
     try {
-      const response = await fetch(`/api/listings?q=${encodeURIComponent(text)}&sort=newest`);
+      const asksAboutPrice = Boolean(currentListing && /\b(price|priced|cost|deal|worth|overpriced|underpriced|expensive|cheap)\b/i.test(text));
+      const searchQuery = asksAboutPrice
+        ? currentListing.category.replaceAll("_", " ") || currentListing.title
+        : text;
+      const response = await fetch(`/api/listings?q=${encodeURIComponent(searchQuery)}&sort=newest`);
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Search failed.");
-      const listings = data.listings as ListingResult[];
+      const searchListings = data.listings as ListingResult[];
+      const otherListings = currentListing
+        ? searchListings.filter((listing) =>
+            listing.routeId !== currentListing.routeId &&
+            (!asksAboutPrice || listing.category === currentListing.category),
+          )
+        : searchListings;
+      const listings = currentListing
+        ? [currentListing, ...otherListings]
+        : searchListings;
+      let priceAssessment = "I couldn’t get a fair-price estimate right now. Please try again.";
+      if (asksAboutPrice && currentListing) {
+        try {
+          const pricingResponse = await fetch("/api/negotiation/research/price-for-listing", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: currentListing.title,
+              category: currentListing.category,
+              condition: currentListing.condition,
+            }),
+          });
+          const reportData = await pricingResponse.json();
+          if (pricingResponse.ok) {
+            const report = reportData as PriceReport;
+            if (report.p50 === null) {
+              priceAssessment = `I matched this listing to ${report.query.brand} ${report.query.model}, but your pricing.py research found only ${report.n_sold} sold listings in this condition, so it can’t provide a reliable fair price. Confidence: insufficient.`;
+            } else {
+              const difference = currentListing.price - report.p50;
+              const comparison = difference > report.p50 * 0.1
+                ? `The listing is $${difference.toFixed(2)} above that estimate.`
+                : difference < -report.p50 * 0.1
+                  ? `The listing is $${Math.abs(difference).toFixed(2)} below that estimate.`
+                  : "The listing is close to that estimate.";
+              priceAssessment = `Your pricing research estimates ${report.query.brand} ${report.query.model} in ${report.query.condition.replaceAll("_", " ")} condition at $${report.p50.toFixed(2)}. It’s the mean sold price from ${report.n_sold} sales (${report.basis}); confidence is ${report.confidence}. The asking price is $${currentListing.price.toFixed(2)}. ${comparison}${report.caveats.length ? ` Caveat: ${report.caveats.join("; ")}.` : ""}`;
+            }
+          } else {
+            priceAssessment = reportData.error === "This listing title does not match a researched brand and model."
+              ? "I couldn’t match this listing to a brand and model in the pricing research catalog, so I can’t give a model-specific fair price yet."
+              : reportData.error ?? priceAssessment;
+          }
+        } catch {
+          // Keep the listing search results useful when the research backend is offline.
+        }
+      }
       setMessages((current) => [...current, {
         role: "assistant",
-        text: listings.length
-          ? `I found ${listings.length} listing${listings.length === 1 ? "" : "s"} that may match.`
-          : "I couldn’t find matching listings. Try a brand or model name, like “iPhone 13”.",
+        text: asksAboutPrice
+          ? `${priceAssessment} I’ve included the item you’re viewing first, followed by other active listings in the same category. The fair-price estimate uses sold listings for the same researched model and condition.`
+          : currentListing
+          ? `You’re viewing ${currentListing.title}${currentListing.category ? ` in ${currentListing.category.replaceAll("_", " ")}` : ""} at $${currentListing.price.toFixed(2)}. I’ll keep this item in view as my recommendation${otherListings.length ? ` and found ${otherListings.length} other listing${otherListings.length === 1 ? "" : "s"} to compare` : ""}.${currentListing.condition ? ` It’s listed as ${currentListing.condition.replaceAll("_", " ")}.` : ""}${currentListing.description?.trim() ? ` The seller describes it as: ${currentListing.description.trim().slice(0, 240)}${currentListing.description.trim().length > 240 ? "…" : ""}` : ""}`
+          : listings.length
+            ? `I found ${listings.length} listing${listings.length === 1 ? "" : "s"} that may match.`
+            : "I couldn’t find matching listings. Try a brand or model name, like “iPhone 13”.",
         listings,
       }]);
     } catch {
@@ -56,8 +124,8 @@ export default function BrowsingChat() {
           <header className="flex items-start justify-between border-b border-hairline px-5 py-4">
             <div>
               <p className="text-xs font-semibold tracking-wide text-primary">JBay ASSISTANT</p>
-              <h2 id="browsing-chat-title" className="mt-1 text-lg font-semibold tracking-tight">Find the right tech</h2>
-              <p className="mt-1 text-sm text-body">Tell us what you’re looking for.</p>
+              <h2 id="browsing-chat-title" className="mt-1 text-lg font-semibold tracking-tight">{currentListing ? "Ask about this item" : "Find the right tech"}</h2>
+              <p className="mt-1 line-clamp-2 text-sm text-body">{currentListing ? `Viewing: ${currentListing.title}` : "Tell us what you’re looking for."}</p>
             </div>
             <button
               aria-label="Minimize chat"
@@ -93,7 +161,7 @@ export default function BrowsingChat() {
               className="h-11 min-w-0 flex-1 rounded-full border border-hairline bg-canvas px-4 text-sm text-ink outline-none placeholder:text-muted focus:border-primary"
               maxLength={500}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="What are you looking for?"
+              placeholder={currentListing ? "Ask about this listing or compare it…" : "What are you looking for?"}
               value={draft}
             />
             <button className="h-11 rounded-full bg-primary px-4 text-sm font-semibold text-on-primary disabled:cursor-not-allowed disabled:opacity-50" disabled={!draft.trim() || isSearching} type="submit">

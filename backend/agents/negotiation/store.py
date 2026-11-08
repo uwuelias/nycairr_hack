@@ -3,7 +3,7 @@ import json, os, secrets, sqlite3, time, uuid
 # Absolute path so the DB is the same file no matter which directory the server is started from.
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions.db")
 COLUMNS = {"buyer_max", "seller_min", "buyer_approval", "seller_approval", "status",
-           "proposed_price", "agreed_price", "anchor", "messages"}
+           "proposed_price", "agreed_price", "anchor", "messages", "buyer_agent", "seller_agent"}
 
 def _conn():
     c = sqlite3.connect(DB_PATH)
@@ -22,6 +22,10 @@ def init():
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT, session_id TEXT, ts REAL,
             actor TEXT, event TEXT, detail TEXT);""")
+        columns = {row[1] for row in c.execute("PRAGMA table_info(sessions)").fetchall()}
+        for column in ("buyer_agent", "seller_agent"):
+            if column not in columns:
+                c.execute(f"ALTER TABLE sessions ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0")
 
 
 def create_session(query: dict, report: dict) -> dict:
@@ -57,6 +61,13 @@ def set_bound(session_id: str, role: str, amount: float) -> bool:
     col = "buyer_max" if role == "buyer" else "seller_min"
     with _conn() as c:
         cur = c.execute(f"UPDATE sessions SET {col} = ? WHERE id = ? AND {col} IS NULL", (amount, session_id))
+    return cur.rowcount == 1
+
+
+def set_agent_enabled(session_id: str, role: str, enabled: bool) -> bool:
+    col = "buyer_agent" if role == "buyer" else "seller_agent"
+    with _conn() as c:
+        cur = c.execute(f"UPDATE sessions SET {col} = ? WHERE id = ?", (int(enabled), session_id))
     return cur.rowcount == 1
 
 

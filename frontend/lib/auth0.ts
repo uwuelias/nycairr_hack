@@ -22,8 +22,10 @@ export const auth0 = auth0Configured
         }
 
         if (session?.user) {
-          const { syncAuth0User } = await import("./sync-auth0-user");
-          syncAuth0User(session.user);
+          const { getAuth0Username, getProfileUsername, syncAuth0User } = await import("./sync-auth0-user");
+          const profileUsername = getProfileUsername(session.user);
+          const auth0Username = profileUsername ?? await getAuth0Username(session.user.sub);
+          syncAuth0User(session.user, auth0Username);
         }
 
         const appBaseUrl = context.appBaseUrl ?? process.env.APP_BASE_URL;

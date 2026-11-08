@@ -2,8 +2,9 @@ import json
 import time
 from pathlib import Path
 
-RUN_DIR = Path("evaluation/runs")
-REVIEW_LOG = Path("evaluation/reviews.jsonl")
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+RUN_DIR = BACKEND_DIR / "evaluation" / "runs"
+REVIEW_LOG = BACKEND_DIR / "evaluation" / "reviews.jsonl"
 
 
 def save_run(kind, images, raw_data, normalized_data, corrections,

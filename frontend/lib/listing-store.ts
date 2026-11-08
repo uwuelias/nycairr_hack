@@ -48,6 +48,16 @@ function getDatabase() {
 }
 
 const MARKETPLACE_PAGE_SIZE = 30;
+const SELLER_DISPLAY_NAME = `CASE
+  WHEN seller.email IS NOT NULL AND TRIM(seller.email) <> '' THEN seller.email
+  WHEN seller.username IS NOT NULL
+    AND seller.username NOT LIKE 'auth0:%'
+    THEN seller.username
+  WHEN instr(TRIM(COALESCE(seller.first_name, '') || ' ' || COALESCE(seller.last_name, '')), '@') = 0
+    AND TRIM(COALESCE(seller.first_name, '') || ' ' || COALESCE(seller.last_name, '')) <> ''
+    THEN TRIM(COALESCE(seller.first_name, '') || ' ' || COALESCE(seller.last_name, ''))
+  ELSE 'JBay member'
+END`;
 
 /** Search active listings and return the first attached image for each item. */
 export function searchMarketplaceListings(
@@ -91,7 +101,7 @@ export function searchMarketplaceListings(
       category.category_id AS category,
       item.item_condition AS condition,
       item.created_at AS listedDate,
-      seller.username AS sellerUsername,
+      ${SELLER_DISPLAY_NAME} AS sellerUsername,
       NULL AS brand,
       NULL AS model,
       (
@@ -164,7 +174,7 @@ export function getMarketplaceListingByRouteId(routeId: string): MarketplaceList
       category.category_id AS category,
       item.item_condition AS condition,
       item.created_at AS listedDate,
-      seller.username AS sellerUsername,
+      ${SELLER_DISPLAY_NAME} AS sellerUsername,
       NULL AS brand,
       NULL AS model,
       item.description,
@@ -192,4 +202,18 @@ export function getMarketplaceListingByRouteId(routeId: string): MarketplaceList
   `).get({ id }) as (Omit<MarketplaceListingDetail, "routeId" | "source" | "imageUrls"> & { imageUrls: string }) | undefined;
 
   return row ? { ...row, imageUrls: JSON.parse(row.imageUrls) as string[], source: "jbay", routeId } : null;
+}
+
+/** Return the local owner identity for a marketplace listing without exposing it in public listing data. */
+export function getMarketplaceListingSellerIdentity(routeId: string): { userId: string; auth0Sub: string | null } | null {
+  const separator = routeId.indexOf("~");
+  if (separator <= 0 || separator === routeId.length - 1 || routeId.slice(0, separator) !== "jbay") return null;
+  const row = getDatabase().prepare(`
+    SELECT item.seller_id AS userId, seller.auth0_sub AS auth0Sub
+    FROM items AS item
+    LEFT JOIN users AS seller ON seller.user_id = item.seller_id
+    WHERE item.item_id = @id AND item.status = 'active'
+    LIMIT 1
+  `).get({ id: routeId.slice(separator + 1) }) as { userId: string; auth0Sub: string | null } | undefined;
+  return row ?? null;
 }
