@@ -19,6 +19,7 @@ export type MarketplaceListing = {
 
 export type MarketplaceListingDetail = MarketplaceListing & {
   description: string | null;
+  imageUrls: string[];
 };
 
 type ListingDatabaseGlobal = typeof globalThis & {
@@ -173,13 +174,22 @@ export function getMarketplaceListingByRouteId(routeId: string): MarketplaceList
         WHERE image.item_id = item.item_id
         ORDER BY image.display_order ASC
         LIMIT 1
-      ) AS imageUrl
+      ) AS imageUrl,
+      COALESCE((
+        SELECT json_group_array(image_url)
+        FROM (
+          SELECT image.image_url AS image_url
+          FROM item_images AS image
+          WHERE image.item_id = item.item_id
+          ORDER BY image.display_order ASC
+        )
+      ), '[]') AS imageUrls
     FROM items AS item
     LEFT JOIN categories AS category ON category.category_id = item.category_id
     LEFT JOIN users AS seller ON seller.user_id = item.seller_id
     WHERE item.item_id = @id AND item.status = 'active'
     LIMIT 1
-  `).get({ id }) as Omit<MarketplaceListingDetail, "routeId" | "source"> | undefined;
+  `).get({ id }) as (Omit<MarketplaceListingDetail, "routeId" | "source" | "imageUrls"> & { imageUrls: string }) | undefined;
 
-  return row ? { ...row, source: "jbay", routeId } : null;
+  return row ? { ...row, imageUrls: JSON.parse(row.imageUrls) as string[], source: "jbay", routeId } : null;
 }

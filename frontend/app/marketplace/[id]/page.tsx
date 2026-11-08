@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { io } from "next/cache";
@@ -7,7 +6,7 @@ import { getMarketplaceListingByRouteId } from "@/lib/listing-store";
 import { formatMarketplaceCondition } from "@/lib/marketplace-filters";
 import SiteFooter from "@/app/components/footer";
 import SiteNavbar from "@/app/components/navbar";
-import { getCategoryGlyph } from "../../components/listing-card";
+import ListingGallery from "./listing-gallery";
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat("en-US", {
@@ -69,29 +68,11 @@ async function ListingDetailsContent({ params }: { params: Promise<{ id: string 
       </div>
 
       <section className="mx-auto grid max-w-7xl items-start gap-10 px-5 pb-20 pt-8 sm:px-8 sm:pb-24 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16 lg:px-12 lg:pt-10">
-        <figure className="relative grid aspect-square place-items-center overflow-hidden rounded-3xl bg-surface-soft">
-          <span className="absolute left-5 top-5 rounded-full bg-canvas px-3 py-1.5 text-xs font-semibold text-body">
-            {category ?? "Technology"}
-          </span>
-          {listing.imageUrl ? (
-            <Image
-              alt={listing.title}
-              className="object-cover"
-              fill
-              priority
-              sizes="(max-width: 1024px) 100vw, 50vw"
-              src={listing.imageUrl}
-              unoptimized
-            />
-          ) : (
-            <span className="grid size-40 place-items-center rounded-full bg-surface-strong text-8xl sm:size-48 sm:text-9xl" aria-hidden="true">
-              {getCategoryGlyph(listing.category)}
-            </span>
-          )}
-          <figcaption className="absolute inset-x-4 bottom-4 rounded-2xl bg-canvas p-4 text-center text-sm text-body sm:inset-x-6 sm:bottom-6 sm:p-5">
-            3D product preview coming soon
-          </figcaption>
-        </figure>
+        <ListingGallery
+          title={listing.title}
+          category={category ?? "Technology"}
+          imageUrls={listing.imageUrls.length ? listing.imageUrls : listing.imageUrl ? [listing.imageUrl] : []}
+        />
 
         <article className="flex flex-col pt-2 lg:pt-8">
           <p className="text-sm font-medium text-primary">{category ?? "Technology"}</p>
@@ -140,6 +121,21 @@ async function ListingDetailsContent({ params }: { params: Promise<{ id: string 
               </div>
             )}
           </dl>
+
+          <div className="mt-7 grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              className="inline-flex min-h-12 items-center justify-center rounded-full bg-primary px-6 py-3 text-sm font-semibold text-on-primary transition-colors hover:bg-primary-focus focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              Buy Now
+            </button>
+            <Link
+              href="/negotiate"
+              className="inline-flex min-h-12 items-center justify-center rounded-full border border-hairline px-6 py-3 text-sm font-semibold text-ink transition-colors hover:bg-surface-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+            >
+              Negotiate
+            </Link>
+          </div>
 
           <Link className="mt-7 inline-flex h-11 w-fit items-center rounded-full bg-surface-strong px-5 text-sm font-semibold text-ink" href="/marketplace">
             Continue browsing

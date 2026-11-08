@@ -1,11 +1,15 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import Image from "next/image";
 
 type ChatMessage = {
   role: "assistant" | "user";
   text: string;
+  listings?: ListingResult[];
 };
+
+type ListingResult = { routeId: string; title: string; price: number; imageUrl: string | null };
 
 export default function BrowsingChat() {
   const [isOpen, setIsOpen] = useState(false);
@@ -13,14 +17,36 @@ export default function BrowsingChat() {
     { role: "assistant", text: "Hi! Tell me what kind of tech you’re looking for." },
   ]);
   const [draft, setDraft] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
 
-  function sendMessage(event: FormEvent<HTMLFormElement>) {
+  async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = draft.trim();
     if (!text) return;
 
     setMessages((current) => [...current, { role: "user", text }]);
     setDraft("");
+    setIsSearching(true);
+    try {
+      const response = await fetch(`/api/listings?q=${encodeURIComponent(text)}&sort=newest`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "Search failed.");
+      const listings = data.listings as ListingResult[];
+      setMessages((current) => [...current, {
+        role: "assistant",
+        text: listings.length
+          ? `I found ${listings.length} listing${listings.length === 1 ? "" : "s"} that may match.`
+          : "I couldn’t find matching listings. Try a brand or model name, like “iPhone 13”.",
+        listings,
+      }]);
+    } catch {
+      setMessages((current) => [...current, {
+        role: "assistant",
+        text: "I couldn’t search listings right now. Please try again.",
+      }]);
+    } finally {
+      setIsSearching(false);
+    }
   }
 
   return (
@@ -45,13 +71,19 @@ export default function BrowsingChat() {
 
           <div className="flex flex-1 flex-col gap-3 overflow-y-auto p-4" aria-live="polite" aria-label="Chat messages">
             {messages.map((message, index) => (
-              <p
-                key={`${message.role}-${index}`}
-                className={`max-w-[88%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "ml-auto bg-primary text-on-primary" : "bg-surface-strong text-ink"}`}
-              >
-                {message.text}
-              </p>
+              <div key={`${message.role}-${index}`} className={`max-w-[95%] ${message.role === "user" ? "ml-auto" : "mr-auto"}`}>
+                <p className={`rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "bg-primary text-on-primary" : "bg-surface-strong text-ink"}`}>
+                  {message.text}
+                </p>
+                {message.listings?.map((listing) => (
+                  <a key={listing.routeId} href={`/marketplace/${encodeURIComponent(listing.routeId)}`} className="mt-2 flex items-center gap-3 rounded-2xl border border-hairline bg-canvas p-2 text-ink hover:border-primary">
+                    {listing.imageUrl ? <Image src={listing.imageUrl} alt="" width={48} height={48} unoptimized className="size-12 rounded-xl object-cover" /> : <span className="grid size-12 place-items-center rounded-xl bg-surface-soft" aria-hidden="true">⌘</span>}
+                    <span className="min-w-0"><span className="block line-clamp-2 text-xs font-semibold">{listing.title}</span><span className="mt-1 block text-xs text-body">${listing.price.toFixed(2)}</span></span>
+                  </a>
+                ))}
+              </div>
             ))}
+            {isSearching && <p className="mr-auto rounded-2xl bg-surface-strong px-4 py-3 text-sm text-body">Searching listings…</p>}
           </div>
 
           <form className="flex gap-2 border-t border-hairline p-3" onSubmit={sendMessage}>
@@ -64,7 +96,7 @@ export default function BrowsingChat() {
               placeholder="What are you looking for?"
               value={draft}
             />
-            <button className="h-11 rounded-full bg-primary px-4 text-sm font-semibold text-on-primary disabled:cursor-not-allowed disabled:opacity-50" disabled={!draft.trim()} type="submit">
+            <button className="h-11 rounded-full bg-primary px-4 text-sm font-semibold text-on-primary disabled:cursor-not-allowed disabled:opacity-50" disabled={!draft.trim() || isSearching} type="submit">
               Send
             </button>
           </form>

@@ -10,6 +10,7 @@ export default function Navbar() {
         </Link>
         <nav className="hidden items-center gap-8 text-sm sm:flex" aria-label="Main navigation">
           <Link className="text-body-muted" href="/marketplace">Marketplace</Link>
+          <Link className="text-body-muted" href="/negotiate">Negotiate</Link>
           <Link className="text-body-muted" href="/sell">Sell with us</Link>
         </nav>
         <AuthActions />
