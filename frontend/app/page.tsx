@@ -34,6 +34,7 @@ export default function Home() {
         <nav className="hidden items-center gap-8 text-sm text-charcoal sm:flex" aria-label="Main navigation">
           <a className="font-semibold text-ink-deep" href="#discover">Discover</a>
           <a href="#how-it-works">How it works</a>
+          <a href="/negotiate">Negotiate</a>
         </nav>
         <div className="flex items-center gap-2">
           <AuthActions />
