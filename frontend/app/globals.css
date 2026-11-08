@@ -23,6 +23,8 @@
   --surface-strong: #eef0f3;
   --surface-dark-elevated: #16181c;
   --muted: #7c828a;
+  --semantic-up: #05b169;
+  --semantic-down: #cf202f;
   --on-primary: #ffffff;
   --on-dark: #ffffff;
 }
@@ -52,6 +54,8 @@
   --color-surface-dark: var(--surface-black);
   --color-surface-dark-elevated: var(--surface-dark-elevated);
   --color-muted: var(--muted);
+  --color-semantic-up: var(--semantic-up);
+  --color-semantic-down: var(--semantic-down);
   --color-on-primary: var(--on-primary);
   --color-on-dark: var(--on-dark);
   --color-ink: var(--ink);

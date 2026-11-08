@@ -1,31 +1,63 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
-import AuthActions from "@/app/components/auth-actions";
-import ListingCard from "./listing-card";
+import SiteFooter from "@/app/components/footer";
+import SiteNavbar from "@/app/components/navbar";
+import ListingCard from "../components/listing-card";
+import BrowsingChat from "../components/browsing-chat";
 import type { MarketplaceListing } from "@/lib/listing-store";
+import { MARKETPLACE_CONDITIONS } from "@/lib/marketplace-filters";
 
 export default function MarketplacePage() {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [conditions, setConditions] = useState<string[]>([]);
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [sort, setSort] = useState("newest");
   const [result, setResult] = useState<{
-    query: string;
+    requestKey: string;
     listings: MarketplaceListing[];
+    hasNextPage: boolean;
+    totalPages: number;
   } | null>(null);
-  const [failedQuery, setFailedQuery] = useState<string | null>(null);
+  const [failedRequest, setFailedRequest] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const query = search.trim();
-  const listings = result?.query === query ? result.listings : [];
-  const error = failedQuery === query;
-  const loading = !error && (result === null || result.query !== query);
+  const requestParams = new URLSearchParams({ q: query, page: String(page), sort });
+  conditions.forEach((condition) => requestParams.append("condition", condition));
+  if (minPrice) requestParams.set("minPrice", minPrice);
+  if (maxPrice) requestParams.set("maxPrice", maxPrice);
+  const requestKey = requestParams.toString();
+  const listings = result?.requestKey === requestKey ? result.listings : [];
+  const hasNextPage = result?.requestKey === requestKey && result.hasNextPage;
+  const totalPages = result?.requestKey === requestKey ? result.totalPages : 0;
+  const firstVisiblePage = Math.max(1, Math.min(page - 2, totalPages - 4));
+  const visiblePages = Array.from(
+    { length: Math.min(5, totalPages) },
+    (_, index) => firstVisiblePage + index,
+  );
+  const error = failedRequest === requestKey;
+  const invalidPriceRange = Boolean(minPrice && maxPrice && Number(minPrice) > Number(maxPrice));
+  const loading = !error && !invalidPriceRange && (result === null || result.requestKey !== requestKey);
+  const hasActiveFilters = conditions.length > 0 || Boolean(minPrice || maxPrice) || sort !== "newest";
+
+  function toggleSelection(value: string, selected: string[], update: (next: string[]) => void) {
+    update(selected.includes(value)
+      ? selected.filter((item) => item !== value)
+      : [...selected, value]);
+    setPage(1);
+  }
 
   useEffect(() => {
+    if (minPrice && maxPrice && Number(minPrice) > Number(maxPrice)) return;
+
     const controller = new AbortController();
 
     const timeout = window.setTimeout(async () => {
       try {
         const response = await fetch(
-          "/api/listings?q=" + encodeURIComponent(query),
+          "/api/listings?" + requestKey,
           { signal: controller.signal },
         );
 
@@ -33,11 +65,18 @@ export default function MarketplacePage() {
 
         const result = (await response.json()) as {
           listings: MarketplaceListing[];
+          hasNextPage: boolean;
+          totalPages: number;
         };
-        setResult({ query, listings: result.listings });
-        setFailedQuery(null);
+        setResult({
+          requestKey,
+          listings: result.listings,
+          hasNextPage: result.hasNextPage,
+          totalPages: result.totalPages,
+        });
+        setFailedRequest(null);
       } catch {
-        if (!controller.signal.aborted) setFailedQuery(query);
+        if (!controller.signal.aborted) setFailedRequest(requestKey);
       }
     }, query ? 250 : 0);
 
@@ -45,22 +84,11 @@ export default function MarketplacePage() {
       window.clearTimeout(timeout);
       controller.abort();
     };
-  }, [query, retryCount]);
+  }, [minPrice, maxPrice, query, requestKey, retryCount]);
 
   return (
     <main className="min-h-screen bg-canvas text-ink">
-      <header className="sticky top-0 z-20 bg-surface-dark text-on-dark">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-12">
-          <Link className="text-lg font-semibold tracking-tight text-primary" href="/" aria-label="Forme home">
-            forme
-          </Link>
-          <nav className="hidden items-center gap-8 text-sm text-on-dark sm:flex" aria-label="Main navigation">
-            <Link className="text-on-dark" href="/marketplace" aria-current="page">Marketplace</Link>
-            <Link className="text-body-muted" href="/#sell">Sell with us</Link>
-          </nav>
-          <AuthActions />
-        </div>
-      </header>
+      <SiteNavbar />
 
       <section className="bg-surface-dark text-on-dark">
         <div className="mx-auto grid max-w-7xl items-center gap-12 px-5 py-16 sm:px-8 sm:py-20 lg:grid-cols-[1fr_0.85fr] lg:gap-20 lg:px-12 lg:py-24">
@@ -117,31 +145,135 @@ export default function MarketplacePage() {
                 aria-label="Search marketplace listings"
                 className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
                 maxLength={100}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
                 placeholder="Search devices, brands, or categories"
                 type="search"
                 value={search}
               />
               {search && (
-                <button className="text-sm font-medium text-primary" onClick={() => setSearch("")} type="button">
+                <button className="text-sm font-medium text-primary" onClick={() => {
+                  setSearch("");
+                  setPage(1);
+                }} type="button">
                   Clear
                 </button>
               )}
             </label>
           </div>
 
-          <div className="mb-6 mt-7 flex items-center justify-between gap-4 text-sm text-body" aria-live="polite">
-            <span>
-              {loading
-                ? "Finding listings…"
-                : search
-                  ? `${listings.length} matching ${listings.length === 1 ? "listing" : "listings"}`
-                  : `${listings.length} newest listings`}
-            </span>
-            <span className="hidden sm:inline">Sorted by recently listed</span>
-          </div>
+          <div className="mt-8 grid gap-8 lg:grid-cols-[240px_minmax(0,1fr)]">
+            <aside className="h-fit rounded-3xl border border-hairline bg-canvas p-5" aria-label="Filter listings">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold">Filters</h3>
+                {hasActiveFilters && (
+                  <button
+                    className="text-xs font-semibold text-primary"
+                    onClick={() => {
+                      setConditions([]);
+                      setMinPrice("");
+                      setMaxPrice("");
+                      setSort("newest");
+                      setPage(1);
+                    }}
+                    type="button"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
 
-          {error ? (
+              <fieldset className="mt-6">
+                <legend className="text-sm font-semibold">Price range</legend>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <label className="text-xs text-body">
+                    Min
+                    <input
+                      className="mt-1 h-11 w-full rounded-xl border border-hairline bg-canvas px-3 text-sm text-ink outline-none focus:border-primary"
+                      min="0"
+                      onChange={(event) => {
+                        setMinPrice(event.target.value);
+                        setPage(1);
+                      }}
+                      placeholder="$0"
+                      type="number"
+                      value={minPrice}
+                    />
+                  </label>
+                  <label className="text-xs text-body">
+                    Max
+                    <input
+                      className="mt-1 h-11 w-full rounded-xl border border-hairline bg-canvas px-3 text-sm text-ink outline-none focus:border-primary"
+                      min="0"
+                      onChange={(event) => {
+                        setMaxPrice(event.target.value);
+                        setPage(1);
+                      }}
+                      placeholder="Any"
+                      type="number"
+                      value={maxPrice}
+                    />
+                  </label>
+                </div>
+                {invalidPriceRange && <p className="mt-2 text-xs text-semantic-down">Minimum must be below maximum.</p>}
+              </fieldset>
+
+              <fieldset className="mt-6">
+                <legend className="text-sm font-semibold">Condition</legend>
+                <div className="mt-3 space-y-3">
+                  {MARKETPLACE_CONDITIONS.map((condition) => (
+                    <label key={condition.value} className="flex cursor-pointer items-center gap-3 text-sm text-body">
+                      <input
+                        checked={conditions.includes(condition.value)}
+                        className="size-4 accent-primary"
+                        onChange={() => toggleSelection(condition.value, conditions, setConditions)}
+                        type="checkbox"
+                      />
+                      {condition.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            </aside>
+
+            <div className="min-w-0">
+              <div className="mb-6 flex flex-wrap items-center justify-between gap-4 text-sm text-body" aria-live="polite">
+                <span>
+                  {invalidPriceRange
+                    ? "Check your price range"
+                    : loading
+                      ? "Finding listings…"
+                      : listings.length > 0
+                        ? `Showing ${(page - 1) * 30 + 1}–${(page - 1) * 30 + listings.length}${search ? ` matches for “${search}”` : " matching listings"}`
+                        : search || hasActiveFilters
+                          ? "No matching listings"
+                          : "No listings available"}
+                </span>
+                <label className="flex items-center gap-2 text-sm text-body">
+                  Sort
+                  <select
+                    className="h-10 rounded-full border border-hairline bg-canvas px-4 text-sm text-ink outline-none focus:border-primary"
+                    onChange={(event) => {
+                      setSort(event.target.value);
+                      setPage(1);
+                    }}
+                    value={sort}
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="price_low_high">Price: low to high</option>
+                    <option value="price_high_low">Price: high to low</option>
+                  </select>
+                </label>
+              </div>
+
+              {invalidPriceRange ? (
+                <div className="rounded-3xl border border-hairline bg-surface-soft px-6 py-16 text-center">
+                  <p className="text-lg font-semibold">The price range isn’t valid.</p>
+                  <p className="mt-2 text-sm text-body">Enter a minimum price lower than the maximum.</p>
+                </div>
+              ) : error ? (
             <div className="rounded-3xl border border-hairline bg-surface-soft px-6 py-16 text-center">
               <p className="text-lg font-semibold">Listings couldn’t load.</p>
               <p className="mt-2 text-sm text-body">Please try again in a moment.</p>
@@ -154,11 +286,49 @@ export default function MarketplacePage() {
               </button>
             </div>
           ) : listings.length > 0 ? (
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {listings.map((listing) => (
-                <ListingCard key={listing.routeId} listing={listing} />
-              ))}
-            </div>
+            <>
+              <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {listings.map((listing) => (
+                  <ListingCard key={listing.routeId} listing={listing} />
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <nav className="mt-12 flex items-center justify-center gap-3" aria-label="Marketplace pagination">
+                  {page > 1 && (
+                    <button
+                      aria-label="Go to previous page"
+                      className="grid size-11 place-items-center rounded-full bg-surface-strong text-ink"
+                      onClick={() => setPage((current) => current - 1)}
+                      type="button"
+                    >
+                      <span aria-hidden="true">←</span>
+                    </button>
+                  )}
+                  {visiblePages.map((pageNumber) => (
+                    <button
+                      key={pageNumber}
+                      aria-current={pageNumber === page ? "page" : undefined}
+                      aria-label={`Go to page ${pageNumber}`}
+                      className={`grid size-11 place-items-center rounded-full text-sm font-semibold ${pageNumber === page ? "bg-primary text-on-primary" : "bg-surface-strong text-ink"}`}
+                      onClick={() => setPage(pageNumber)}
+                      type="button"
+                    >
+                      {pageNumber}
+                    </button>
+                  ))}
+                  {hasNextPage && (
+                    <button
+                      aria-label="Go to next page"
+                      className="grid size-11 place-items-center rounded-full bg-primary text-on-primary"
+                      onClick={() => setPage((current) => current + 1)}
+                      type="button"
+                    >
+                      <span aria-hidden="true">→</span>
+                    </button>
+                  )}
+                </nav>
+              )}
+            </>
           ) : loading ? (
             <p className="py-20 text-center text-sm text-body">Loading the latest listings…</p>
           ) : (
@@ -166,17 +336,14 @@ export default function MarketplacePage() {
               <p className="text-lg font-semibold">No listings found.</p>
               <p className="mt-2 text-sm text-body">Try another device, brand, or category.</p>
             </div>
-          )}
+              )}
+            </div>
+          </div>
         </div>
       </section>
 
-      <footer className="border-t border-hairline bg-canvas px-5 py-10 text-sm text-body sm:px-8 lg:px-12">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link className="font-semibold text-primary" href="/">forme</Link>
-          <span>Good technology deserves another life.</span>
-          <Link className="text-primary" href="/#sell">Sell with us</Link>
-        </div>
-      </footer>
+      <BrowsingChat />
+      <SiteFooter />
     </main>
   );
 }

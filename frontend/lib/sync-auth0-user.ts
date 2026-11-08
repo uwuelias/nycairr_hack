@@ -1,52 +1,20 @@
-import Database from "better-sqlite3";
-import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
 import type { User } from "@auth0/nextjs-auth0/types";
+import { getMarketplaceDatabase } from "./marketplace-database";
 
-type DatabaseGlobal = typeof globalThis & {
-  auth0UserDatabase?: Database.Database;
-};
-
-const globalForDatabase = globalThis as DatabaseGlobal;
-
-function getDatabase() {
-  if (globalForDatabase.auth0UserDatabase) {
-    return globalForDatabase.auth0UserDatabase;
-  }
-
-  const databasePath = resolve(
-    process.cwd(),
-    process.env.APP_DATABASE_PATH ?? "../backend/data/listing.db",
-  );
-  const database = new Database(databasePath, { timeout: 5_000 });
-
-  database.exec(`
-    CREATE TABLE IF NOT EXISTS app_users (
-      auth0_sub TEXT PRIMARY KEY NOT NULL,
-      email TEXT,
-      name TEXT,
-      picture TEXT,
-      email_verified INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      last_login_at TEXT NOT NULL
-    )
-  `);
-
-  globalForDatabase.auth0UserDatabase = database;
-  return database;
-}
-
-/** Upsert the minimum Auth0 profile data needed by the application. */
-export function syncAuth0User(user: User): void {
+/** Upsert an Auth0 profile and return its stable internal marketplace user id. */
+export function syncAuth0User(user: User): string {
   if (!user.sub) {
     throw new Error("Cannot sync an Auth0 user without a subject identifier.");
   }
 
   const now = new Date().toISOString();
 
-  getDatabase()
+  const database = getMarketplaceDatabase();
+  database
     .prepare(`
-      INSERT INTO app_users (
+      INSERT INTO users (
+        id,
         auth0_sub,
         email,
         name,
@@ -56,6 +24,7 @@ export function syncAuth0User(user: User): void {
         updated_at,
         last_login_at
       ) VALUES (
+        @id,
         @auth0Sub,
         @email,
         @name,
@@ -74,6 +43,7 @@ export function syncAuth0User(user: User): void {
         last_login_at = excluded.last_login_at
     `)
     .run({
+      id: randomUUID(),
       auth0Sub: user.sub,
       email: user.email ?? null,
       name: user.name ?? null,
@@ -81,4 +51,14 @@ export function syncAuth0User(user: User): void {
       emailVerified: Number(user.email_verified ?? false),
       now,
     });
+
+  const row = database
+    .prepare("SELECT id FROM users WHERE auth0_sub = ?")
+    .get(user.sub) as { id: string } | undefined;
+
+  if (!row) {
+    throw new Error("Auth0 user sync completed without a marketplace user record.");
+  }
+
+  return row.id;
 }

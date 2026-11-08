@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { MarketplaceListing } from "@/lib/listing-store";
+import { formatMarketplaceCondition } from "@/lib/marketplace-filters";
 
 export function getCategoryGlyph(category: string) {
   const value = category.toLowerCase();
@@ -33,7 +34,7 @@ function formatLabel(value: string | null) {
 }
 
 export default function ListingCard({ listing }: { listing: MarketplaceListing }) {
-  const condition = formatLabel(listing.condition);
+  const condition = formatMarketplaceCondition(listing.condition);
   const listedDate = listing.listedDate
     ? new Date(listing.listedDate).toLocaleDateString("en-US", {
         month: "short",

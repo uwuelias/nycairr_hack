@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "forme — good things, found again",
+  title: "JBay",
   description:
-    "Discover pre-loved technology worth keeping. Find phones, computers, audio, and more for a second life.",
+    "Discover pre-loved technology worth keeping. Find phones, computers, audio, and more for a second life with the help of our AI agents.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

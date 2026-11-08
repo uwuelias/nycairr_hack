@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import AuthActions from "./components/auth-actions";
-import ListingCard from "./marketplace/listing-card";
+import SiteFooter from "./components/footer";
+import SiteNavbar from "./components/navbar";
+import ListingCard from "./components/listing-card";
 import type { MarketplaceListing } from "@/lib/listing-store";
 
 const categories = [
@@ -38,19 +39,7 @@ export default function Home() {
   return (
     <main className="bg-canvas text-ink">
       <div className="bg-surface-dark text-on-dark">
-        <header className="relative z-10">
-          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-12">
-            <Link className="text-lg font-semibold tracking-tight text-primary" href="/" aria-label="Forme home">
-              forme
-            </Link>
-            <nav className="hidden items-center gap-8 text-sm sm:flex" aria-label="Main navigation">
-              <Link className="text-on-dark" href="/marketplace">Marketplace</Link>
-              <Link className="text-body-muted" href="#categories">Technology</Link>
-              <Link className="text-body-muted" href="#sell">Sell with us</Link>
-            </nav>
-            <AuthActions />
-          </div>
-        </header>
+        <SiteNavbar />
 
         <section id="top" className="mx-auto grid max-w-7xl items-center gap-14 px-5 pb-20 pt-10 sm:px-8 sm:pb-24 lg:grid-cols-[1fr_0.9fr] lg:gap-20 lg:px-12 lg:pb-28 lg:pt-12">
           <div>
@@ -152,17 +141,11 @@ export default function Home() {
           <p className="text-sm font-medium text-on-dark-soft">For your next chapter</p>
           <h2 className="mt-3 text-4xl font-normal tracking-tight sm:text-5xl">Pass good tech along.</h2>
           <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-on-dark-soft">Have a device ready for a new owner? Get in touch and help it find its next home.</p>
-          <a className="mt-7 inline-flex h-11 items-center rounded-full bg-primary px-5 text-sm font-semibold text-on-primary" href="mailto:hello@forme.market">Sell with us</a>
+          <Link className="mt-7 inline-flex h-11 items-center rounded-full bg-primary px-5 text-sm font-semibold text-on-primary" href="/sell">Sell with us</Link>
         </div>
       </section>
 
-      <footer id="how-it-works" className="bg-canvas px-5 py-10 text-sm text-body sm:px-8 lg:px-12">
-        <div className="mx-auto flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Link className="font-semibold text-primary" href="#top">forme</Link>
-          <p>Good technology deserves another life.</p>
-          <Link className="text-primary" href="/marketplace">Marketplace</Link>
-        </div>
-      </footer>
+      <SiteFooter />
     </main>
   );
 }

@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import { resolve } from "node:path";
+import type { MarketplaceSort } from "./marketplace-filters";
 
 export type MarketplaceListing = {
   id: string;
@@ -43,10 +44,41 @@ function getDatabase() {
   return database;
 }
 
-/** Search active asking listings, returning at most 30 newest results. */
-export function searchMarketplaceListings(search = ""): MarketplaceListing[] {
+const MARKETPLACE_PAGE_SIZE = 30;
+
+/** Search active asking listings in pages of 30 newest results. */
+export function searchMarketplaceListings(
+  search = "",
+  page = 1,
+  filters: {
+    minPrice?: number | null;
+    maxPrice?: number | null;
+    conditions?: string[];
+    sort?: MarketplaceSort;
+  } = {},
+): { listings: MarketplaceListing[]; hasNextPage: boolean; totalPages: number } {
   const query = search.trim();
   const database = getDatabase();
+  const offset = (page - 1) * MARKETPLACE_PAGE_SIZE;
+  const selectedConditions = filters.conditions ?? [];
+  const conditionFilter = selectedConditions.length
+    ? `AND condition IN (${selectedConditions.map((_, index) => `@condition${index}`).join(", ")})`
+    : "";
+  const sortOrder = {
+    newest: "listedDate DESC, fetchedAt DESC, id ASC",
+    price_low_high: "price ASC, listedDate DESC, fetchedAt DESC, id ASC",
+    price_high_low: "price DESC, listedDate DESC, fetchedAt DESC, id ASC",
+  }[filters.sort ?? "newest"];
+  const bindings: Record<string, string | number | null> = {
+    query,
+    limit: MARKETPLACE_PAGE_SIZE + 1,
+    offset,
+    minPrice: filters.minPrice ?? null,
+    maxPrice: filters.maxPrice ?? null,
+  };
+  selectedConditions.forEach((condition, index) => {
+    bindings[`condition${index}`] = condition;
+  });
 
   const rows = database
     .prepare(`
@@ -78,7 +110,8 @@ export function searchMarketplaceListings(search = ""): MarketplaceListing[] {
         condition,
         listedDate,
         brand,
-        model
+        model,
+        COUNT(*) OVER () AS totalCount
       FROM latest_observations
       WHERE observationRank = 1
         AND priceType = 'asking'
@@ -89,15 +122,34 @@ export function searchMarketplaceListings(search = ""): MarketplaceListing[] {
           instr(lower(COALESCE(brand, '')), lower(@query)) > 0 OR
           instr(lower(COALESCE(model, '')), lower(@query)) > 0
         )
-      ORDER BY listedDate DESC, fetchedAt DESC, id ASC
-      LIMIT 30
+        AND (@minPrice IS NULL OR price >= @minPrice)
+        AND (@maxPrice IS NULL OR price <= @maxPrice)
+        ${conditionFilter}
+      ORDER BY ${sortOrder}
+      LIMIT @limit OFFSET @offset
     `)
-    .all({ query }) as Omit<MarketplaceListing, "routeId">[];
+    .all(bindings) as (Omit<MarketplaceListing, "routeId"> & { totalCount: number })[];
 
-  return rows.map((listing) => ({
-    ...listing,
+  const hasNextPage = rows.length > MARKETPLACE_PAGE_SIZE;
+  const totalCount = rows[0]?.totalCount ?? 0;
+  const listings = rows.slice(0, MARKETPLACE_PAGE_SIZE).map((listing) => ({
+    id: listing.id,
     routeId: `${listing.source}~${listing.id}`,
+    source: listing.source,
+    title: listing.title,
+    price: listing.price,
+    category: listing.category,
+    condition: listing.condition,
+    listedDate: listing.listedDate,
+    brand: listing.brand,
+    model: listing.model,
   }));
+
+  return {
+    listings,
+    hasNextPage,
+    totalPages: Math.ceil(totalCount / MARKETPLACE_PAGE_SIZE),
+  };
 }
 
 /** Find the latest asking observation for one source item. */

@@ -1,7 +1,12 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { io } from "next/cache";
 import { getMarketplaceListingByRouteId } from "@/lib/listing-store";
-import { getCategoryGlyph } from "../listing-card";
+import { formatMarketplaceCondition } from "@/lib/marketplace-filters";
+import SiteFooter from "@/app/components/footer";
+import SiteNavbar from "@/app/components/navbar";
+import { getCategoryGlyph } from "../../components/listing-card";
 
 function formatPrice(price: number) {
   return new Intl.NumberFormat("en-US", {
@@ -26,34 +31,36 @@ function formatListedDate(value: string | null) {
   });
 }
 
-export default async function ListingDetailsPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+function ListingDetailsLoading() {
+  return (
+    <div className="mx-auto max-w-7xl px-5 pb-20 pt-8 sm:px-8 sm:pb-24 lg:px-12 lg:pt-10" aria-label="Loading listing">
+      <div className="h-5 w-40 animate-pulse rounded-full bg-surface-strong" />
+      <div className="mt-8 grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:gap-16">
+        <div className="aspect-square animate-pulse rounded-3xl bg-surface-soft" />
+        <div className="space-y-5 pt-2 lg:pt-8">
+          <div className="h-4 w-28 animate-pulse rounded-full bg-surface-strong" />
+          <div className="h-12 max-w-lg animate-pulse rounded-xl bg-surface-soft" />
+          <div className="h-8 w-36 animate-pulse rounded-xl bg-surface-soft" />
+          <div className="mt-8 h-32 animate-pulse rounded-3xl bg-surface-soft" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+async function ListingDetailsContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  await io();
   const listing = getMarketplaceListingByRouteId(id);
 
   if (!listing) notFound();
 
-  const condition = formatLabel(listing.condition);
+  const condition = formatMarketplaceCondition(listing.condition);
   const category = formatLabel(listing.category);
   const listedDate = formatListedDate(listing.listedDate);
 
   return (
-    <main className="min-h-screen bg-canvas text-ink">
-      <header className="bg-surface-dark text-on-dark">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 sm:px-8 lg:px-12">
-          <Link className="text-lg font-semibold tracking-tight text-primary" href="/" aria-label="Forme home">
-            forme
-          </Link>
-          <nav className="flex items-center gap-6 text-sm" aria-label="Main navigation">
-            <Link className="text-on-dark-soft" href="/marketplace">Marketplace</Link>
-            <Link className="hidden text-on-dark-soft sm:inline" href="/#sell">Sell with us</Link>
-          </nav>
-        </div>
-      </header>
-
+    <>
       <div className="mx-auto max-w-7xl px-5 pt-7 sm:px-8 lg:px-12">
         <Link className="inline-flex items-center gap-2 text-sm font-medium text-primary" href="/marketplace">
           <span aria-hidden="true">←</span> Back to marketplace
@@ -123,13 +130,20 @@ export default async function ListingDetailsPage({
           </Link>
         </article>
       </section>
+    </>
+  );
+}
 
-      <footer className="border-t border-hairline bg-canvas px-5 py-8 text-sm text-body sm:px-8 lg:px-12">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
-          <Link className="font-semibold text-primary" href="/">forme</Link>
-          <Link className="text-primary" href="/marketplace">Marketplace</Link>
-        </div>
-      </footer>
+export default function ListingDetailsPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <main className="min-h-screen bg-canvas text-ink">
+      <SiteNavbar />
+
+      <Suspense fallback={<ListingDetailsLoading />}>
+        <ListingDetailsContent params={params} />
+      </Suspense>
+
+      <SiteFooter />
     </main>
   );
 }
