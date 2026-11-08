@@ -80,7 +80,7 @@ export default function ListingCard({ listing }: { listing: MarketplaceListing }
             {listing.title}
           </h2>
           {listing.sellerUsername && (
-            <p className="mt-2 truncate text-xs text-body">Sold by {listing.sellerUsername}</p>
+            <p className="mt-2 truncate text-xs text-body">Seller: {listing.sellerUsername}</p>
           )}
           <div className="mt-4 flex items-end justify-between gap-3 border-t border-hairline-soft pt-4">
             <div className="min-w-0 text-sm text-body">

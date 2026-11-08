@@ -3,13 +3,16 @@
 import Image from "next/image";
 import { useState } from "react";
 import { getCategoryGlyph } from "../../components/listing-card";
+import ModelViewer from "./model-viewer";
 
-export default function ListingGallery({ title, category, imageUrls }: {
+export default function ListingGallery({ title, category, imageUrls, modelSrc }: {
   title: string;
   category: string;
   imageUrls: string[];
+  modelSrc?: string;
 }) {
   const [index, setIndex] = useState(0);
+  const [view, setView] = useState<"photos" | "model">(modelSrc ? "model" : "photos");
   const hasImages = imageUrls.length > 0;
 
   return (
@@ -17,7 +20,29 @@ export default function ListingGallery({ title, category, imageUrls }: {
       <span className="absolute left-5 top-5 z-10 rounded-full bg-canvas px-3 py-1.5 text-xs font-semibold text-body">
         {category || "Technology"}
       </span>
-      {hasImages ? (
+      {modelSrc && (
+        <div className="absolute right-4 top-4 z-10 flex gap-1 rounded-full bg-canvas p-1 shadow-sm" aria-label="Listing media view">
+          <button
+            type="button"
+            aria-pressed={view === "photos"}
+            onClick={() => setView("photos")}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${view === "photos" ? "bg-primary text-on-primary" : "text-ink hover:bg-surface-strong"}`}
+          >
+            Photos
+          </button>
+          <button
+            type="button"
+            aria-pressed={view === "model"}
+            onClick={() => setView("model")}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${view === "model" ? "bg-primary text-on-primary" : "text-ink hover:bg-surface-strong"}`}
+          >
+            3D model
+          </button>
+        </div>
+      )}
+      {view === "model" && modelSrc ? (
+        <ModelViewer src={modelSrc} title={title} />
+      ) : hasImages ? (
         <Image
           key={imageUrls[index]}
           alt={`${title} photo ${index + 1} of ${imageUrls.length}`}
@@ -33,7 +58,7 @@ export default function ListingGallery({ title, category, imageUrls }: {
           {getCategoryGlyph(category)}
         </span>
       )}
-      {imageUrls.length > 1 && (
+      {view === "photos" && imageUrls.length > 1 && (
         <>
           <button
             type="button"

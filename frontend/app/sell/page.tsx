@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import SiteFooter from "@/app/components/footer";
 import SiteNavbar from "@/app/components/navbar";
 import SellForm from "../components/sell-form";
+import EvaluationPanel from "../components/evaluation-panel";
 import { auth0 } from "@/lib/auth0";
 
 function SellPageLoading() {
@@ -39,6 +40,7 @@ async function ProtectedSellPage() {
 
       <section className="bg-surface-soft px-5 py-10 sm:px-8 sm:py-14 lg:px-12">
         <div className="mx-auto max-w-7xl">
+          <EvaluationPanel />
           <SellForm />
         </div>
       </section>

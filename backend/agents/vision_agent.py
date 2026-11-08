@@ -388,6 +388,19 @@ def _analyze_claims_sync(images: list[str], profile: CategoryProfile) -> VisionR
     if override:
         print(override)
     seconds = round(time.time() - started, 1)
+    try:
+        save_run(
+            kind="claims",
+            images=images,
+            raw_data=raw_data,
+            normalized_data=result.model_dump(mode="json"),
+            corrections=corrections,
+            override=override,
+            seconds=seconds,
+            extra={"profile": profile.name},
+        )
+    except OSError as error:
+        print(f"Evaluation run could not be saved: {error}")
     print(f"Claims call: {seconds}s")
     return result
 
