@@ -1,6 +1,5 @@
 
 from typing import Literal
-from agents.vision_agent import confirm_claims
 from services.identifier_check import require_proposal_confirmation
 from pydantic import (
     BaseModel,

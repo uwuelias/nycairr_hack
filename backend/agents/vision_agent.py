@@ -6,7 +6,7 @@ from ollama import chat
 import time
 
 from services.ocr_check import ocr_text, text_corroborated
-from services.run_logging import save_run
+from services.run_logging import log_review, save_run
 from services.category_profiles import CategoryProfile, match_profile
 from services.claim_normalization import (
     normalize_claims,
@@ -26,7 +26,6 @@ from services.identifier_check import (
     PROPOSAL_ONLY,
     downgrade_hedged_observations,
     require_proposal_confirmation,
-    verify_model_claim,
 )
 
 
@@ -301,6 +300,11 @@ def _analyze_claims_sync(images: list[str], profile: CategoryProfile) -> VisionR
     normalized_data, set_corrections = resolve_claim_set(normalized_data)
     corrections += set_corrections
 
+# Downgrade observed claims containing uncertain language.
+    normalized_data, hedged_corrections = downgrade_hedged_observations(normalized_data)
+    corrections += hedged_corrections
+
+    # Require seller confirmation for proposed defects and colors.
     normalized_data, proposal_corrections = require_proposal_confirmation(normalized_data)
     corrections += proposal_corrections
     if corrections:
@@ -495,11 +499,17 @@ def enforce_next_action(result: VisionResult, profile: CategoryProfile):
         update={"next_action": next_action, "question": question}
     ), override
 
+def _category_of(result: VisionResult) -> str | None:
+    return next(
+        (c.value for c in result.claims if c.attribute == "category" and c.value),
+        None,
+    )
 
 def confirm_claims(result: VisionResult, accepted: list[int]) -> VisionResult:
     """Apply the seller's review. `accepted` holds the 1-based numbers shown
     in the review question. Rejected defects are dropped; a rejected color
-    becomes unknown."""
+    becomes unknown. Every decision is logged."""
+    category = _category_of(result)
     numbered = {i: n for n, (i, _) in enumerate(proposal_list(result), start=1)}
     claims = []
 
@@ -507,7 +517,15 @@ def confirm_claims(result: VisionResult, accepted: list[int]) -> VisionResult:
         n = numbered.get(i)
         if n is None:
             claims.append(claim)
-        elif n in accepted and claim.evidence_image is not None:
+            continue
+
+        log_review(
+            claim.attribute, claim.value,
+            "accepted" if n in accepted else "rejected",
+            category, claim.evidence_image,
+        )
+
+        if n in accepted and claim.evidence_image is not None:
             claims.append(Claim(
                 attribute=claim.attribute,
                 value=claim.value,
@@ -614,9 +632,15 @@ async def add_model_label(
 
 def confirm_model(result: VisionResult, confirmed: bool) -> VisionResult:
     """Apply the seller's yes/no answer to the model claim."""
+    category = _category_of(result)
     claims = []
     for claim in result.claims:
         if claim.attribute == "model" and claim.status == "inferred":
+            log_review(
+                "model", claim.value,
+                "accepted" if confirmed else "rejected",
+                category, claim.evidence_image,
+            )
             if confirmed:
                 claim = Claim(
                     attribute="model",

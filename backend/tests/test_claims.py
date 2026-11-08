@@ -1,11 +1,14 @@
 import pytest
+import json
+from agents.vision_agent import confirm_claims
+from services import run_logging
 from pydantic import ValidationError
 from services.ocr_check import text_corroborated
 from schemas.photo_coverage import PhotoCoverage
 from services.category_profiles import GENERIC, match_profile
 from services.claim_normalization import enforce_unverifiable
 from services.photo_validation import validate_photo_coverage
-from schemas.claims import Claim
+from schemas.claims import Claim, VisionResult
 from services.claim_normalization import (
     REQUIRED_ATTRIBUTES,
     resolve_claim_set,
@@ -137,3 +140,37 @@ def test_functionality_never_stays_inferred():
     assert claim["status"] == "requires_user_confirmation"
     assert claim["value"] is None
     assert len(log) == 1
+def _review_result():
+    return VisionResult(
+        claims=[
+            Claim(
+                attribute="defect",
+                value="Headband peeling",
+                status="inferred",
+                evidence_image=0,
+                evidence_description="Peeling visible on the headband.",
+            ),
+            Claim(
+                attribute="defect",
+                value="Earcup scratch",
+                status="inferred",
+                evidence_image=1,
+                evidence_description="Scratch reported on the earcup.",
+            ),
+            Claim(
+                attribute="color",
+                value="Black",
+                status="inferred",
+                evidence_image=0,
+                evidence_description="Black surface visible.",
+            ),
+        ],
+        next_action="request_user_confirmation",
+        question="Which claims are correct?",
+    )
+def test_review_decisions_are_logged():
+    confirm_claims(_review_result(), accepted=[1])
+    lines = run_logging.REVIEW_LOG.read_text(encoding="utf-8").splitlines()
+    entries = [json.loads(line) for line in lines]
+    assert [e["decision"] for e in entries] == ["accepted", "rejected", "rejected"]
+    assert [e["attribute"] for e in entries] == ["defect", "defect", "color"]
