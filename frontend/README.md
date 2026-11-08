@@ -18,6 +18,12 @@ offered by this app.
 4. Restart the app with `npm run dev`. The header provides sign-in, signup, and
    sign-out actions.
 
+After a successful login, the Auth0 callback upserts the user's Auth0 subject,
+email, name, picture, email-verification flag, and login timestamps into the
+`app_users` table. `APP_DATABASE_PATH` defaults to the existing
+`../backend/data/listing.db`; set it to another SQLite file if needed. The sync
+does not store passwords, access tokens, or ID tokens.
+
 ## Getting Started
 
 First, run the development server:
