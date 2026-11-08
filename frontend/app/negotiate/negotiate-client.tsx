@@ -12,8 +12,8 @@ type Message = { sender: string; text: string; price?: number; ts: number };
 type Session = {
   session_id: string; role: Role; status: string;
   item: { brand: string; model: string; condition: string };
-  price_report: { p50: number | null; n_sold: number };
-  your_limit: number | null; other_submitted_limit: boolean;
+  price_report: { p50: number | null; n_sold: number; confidence: string };
+  you_submitted_bound: boolean; other_submitted_bound: boolean;
   proposed_price: number | null; agreed_price: number | null;
   you_responded: boolean | null; messages: Message[];
 };
@@ -25,9 +25,9 @@ function storeSaved(list: Saved[]) {
   try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)); } catch {}
 }
 
-async function api(path: string, token?: string, body?: unknown) {
-  const res = await fetch(`${API}${path}`, {
-    method: body === undefined ? "GET" : "POST",
+async function api(path: string, token?: string, body?: unknown, method = body === undefined ? "GET" : "POST") {
+  const res = await fetch(`${API}/api${path}`, {
+    method,
     headers: { "Content-Type": "application/json", ...(token ? { "X-Session-Token": token } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
@@ -79,9 +79,9 @@ export default function NegotiateClient() {
     return () => { clearTimeout(first); clearInterval(t); };
   }, [active, refresh]);
 
-  async function act(path: string, body: unknown) {
+  async function act(path: string, body: unknown, method = "POST") {
     if (!active) return;
-    try { setSession(await api(`/sessions/${active.id}${path}`, active.token, body)); setError(null); }
+    try { setSession(await api(`/sessions/${active.id}${path}`, active.token, body, method)); setError(null); }
     catch (e) { setError((e as Error).message); }
   }
 
@@ -92,7 +92,7 @@ export default function NegotiateClient() {
     };
     const role = form.get("role") as Role;
     try {
-      const r = await api("/sessions", undefined, { item });
+      const r = await api("/sessions", undefined, { query: item });
       const title = `${item.brand} ${item.model}`;
       const other: Role = role === "buyer" ? "seller" : "buyer";
       const mine: Saved = { id: r.session_id, role, token: r[`${role}_token`], title };
@@ -144,7 +144,7 @@ export default function NegotiateClient() {
 }
 
 function ChatWindow({ session, invite, act }: {
-  session: Session; invite: string | null; act: (path: string, body: unknown) => Promise<void>;
+  session: Session; invite: string | null; act: (path: string, body: unknown, method?: string) => Promise<void>;
 }) {
   const [text, setText] = useState("");
   const [limit, setLimit] = useState("");
@@ -183,22 +183,22 @@ function ChatWindow({ session, invite, act }: {
       </div>
 
       <footer className="flex flex-col gap-3 border-t border-hairline-soft p-4">
-        {session.your_limit === null && session.status === "collecting_bounds" && (
-          <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); act("/limit", { amount: Number(limit) }); }}>
+        {!session.you_submitted_bound && session.status === "collecting_bounds" && (
+          <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); act("/bound", { amount: Number(limit) }, "PUT"); }}>
             <input value={limit} onChange={(e) => setLimit(e.target.value)} type="number" min="1" step="0.01" required
               placeholder={me === "buyer" ? "Most you'll pay (private)" : "Least you'll accept (private)"}
               className="flex-1 rounded-full bg-surface-soft px-4 py-2 text-sm" />
             <button className="rounded-full bg-primary px-5 py-2 text-sm font-bold text-on-primary">Set limit</button>
           </form>
         )}
-        {session.your_limit !== null && session.status === "collecting_bounds" && (
-          <p className="text-sm text-steel">Your private limit: {money(session.your_limit)}. Waiting for the other side…</p>
+        {session.you_submitted_bound && session.status === "collecting_bounds" && (
+          <p className="text-sm text-steel">Your private limit is in. Waiting for the other side…</p>
         )}
         {session.status === "awaiting_approval" && session.you_responded === null && session.proposed_price !== null && (
           <div className="flex items-center gap-2 text-sm">
             <span className="flex-1">Agents propose <strong>{money(session.proposed_price)}</strong></span>
-            <button onClick={() => act("/respond", { accept: true })} className="rounded-full bg-ink-button px-5 py-2 font-bold text-on-ink-button">Accept</button>
-            <button onClick={() => act("/respond", { accept: false })} className="rounded-full border-2 border-ink-deep px-5 py-2 font-bold">Decline</button>
+            <button onClick={() => act("/respond", { approve: true })} className="rounded-full bg-ink-button px-5 py-2 font-bold text-on-ink-button">Accept</button>
+            <button onClick={() => act("/respond", { approve: false })} className="rounded-full border-2 border-ink-deep px-5 py-2 font-bold">Decline</button>
           </div>
         )}
         <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); if (text.trim()) { act("/messages", { text }); setText(""); } }}>

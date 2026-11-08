@@ -9,7 +9,7 @@ from langgraph.types import interrupt
 from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 
-from store import get_bounds 
+from agents.negotiation.store import get_bounds 
 
 class BrokerState(TypedDict, total=False):
     messages: Annotated[list[BaseMessage], operator.add]   
