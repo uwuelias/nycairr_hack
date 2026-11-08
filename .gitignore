@@ -19,3 +19,7 @@ Thumbs.db
 
 # Generated logs
 *.log
+__pycache__/
+*.pyc
+backend/venv/
+backend/agents/negotiation/sessions.db

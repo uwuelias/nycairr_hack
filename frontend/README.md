@@ -18,6 +18,22 @@ offered by this app.
 4. Restart the app with `npm run dev`. The header provides sign-in, signup, and
    sign-out actions.
 
+To require a unique username during signup, open Auth0 Dashboard →
+Authentication → Database → `Username-Password-Authentication` and enable
+**Requires Username**. Auth0 Universal Login adds the username field to signup
+and enforces uniqueness in that database connection. The app syncs the username
+claim to `users.username`, which also has a unique constraint in
+`marketplace.db`.
+
+After a successful login, the Auth0 callback upserts the user's Auth0 subject,
+email, name, picture, email-verification flag, and login timestamps into the
+`users` table in `../backend/databases/marketplace.db`. Auth0 identities map to
+the database's app-owned `user_id` through a unique `auth0_sub`; the Auth0
+password remains with Auth0. Seller listings are stored in `items`, and their
+photo URLs are stored in `item_images`. Set `MARKETPLACE_DATABASE_PATH` if the
+SQLite file is elsewhere. The separate `../backend/data/listing.db` contains
+scraped price observations and is not used by the marketplace listing pages.
+
 ## Getting Started
 
 First, run the development server:
