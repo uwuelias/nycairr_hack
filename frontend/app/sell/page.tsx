@@ -5,7 +5,7 @@ import SiteFooter from "@/app/components/footer";
 import SiteNavbar from "@/app/components/navbar";
 import SellForm from "../components/sell-form";
 import EvaluationPanel from "../components/evaluation-panel";
-import { auth0 } from "@/lib/auth0";
+import { auth0, auth0Configured } from "@/lib/auth0";
 
 function SellPageLoading() {
   return (
@@ -22,7 +22,12 @@ async function ProtectedSellPage() {
   await io();
   const session = await auth0?.getSession();
 
-  if (!session) {
+  const localDemo =
+    process.env.NODE_ENV === "development" &&
+    process.env.DEMO_VISION_NO_AUTH === "true" &&
+    !auth0Configured;
+
+  if (!session && !localDemo) {
     redirect("/auth/login?returnTo=%2Fsell");
   }
 

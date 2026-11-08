@@ -7,6 +7,27 @@ import { MARKETPLACE_CATEGORIES, SELLING_CONDITIONS } from "@/lib/marketplace-op
 
 type ListingPhoto = { id: string; file: File; previewUrl: string };
 
+type VisionClaim = {
+  attribute: string;
+  value: string | null;
+  status: string;
+  evidence_image: number | null;
+  evidence_description: string | null;
+};
+
+type VisionResponse = {
+  analysis: {
+    claims: VisionClaim[];
+    next_action: string;
+    question: string | null;
+  };
+  coverage: {
+    allowed_to_list: boolean;
+    missing_views: string[];
+    quality_issues: string[];
+  };
+};
+
 export default function SellForm() {
   const [photos, setPhotos] = useState<ListingPhoto[]>([]);
   const [photoError, setPhotoError] = useState("");
@@ -15,6 +36,9 @@ export default function SellForm() {
   const [submitting, setSubmitting] = useState(false);
   const previewUrls = useRef(new Set<string>());
   const formRef = useRef<HTMLFormElement>(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiError, setAiError] = useState("");
+  const [aiResult, setAiResult] = useState<VisionResponse | null>(null);
 
   useEffect(() => () => {
     previewUrls.current.forEach((url) => URL.revokeObjectURL(url));
@@ -61,6 +85,132 @@ export default function SellForm() {
     URL.revokeObjectURL(photo.previewUrl);
     previewUrls.current.delete(photo.previewUrl);
     setPhotos((current) => current.filter((item) => item.id !== photo.id));
+  }
+
+  async function handleAnalyze() {
+    if (photos.length === 0) {
+      setAiError("Upload at least one photo first.");
+      return;
+    }
+
+    setAnalyzing(true);
+    setAiError("");
+    setAiResult(null);
+
+    try {
+      const formData = new FormData();
+      const selected = photos.slice(0, 5);
+
+      const totalBytes = selected.reduce(
+        (sum, photo) => sum + photo.file.size,
+        0
+      );
+
+      if (totalBytes > 30 * 1024 * 1024) {
+        throw new Error("The selected photos exceed the 30 MB analysis limit.");
+      }
+
+      selected.forEach((photo) => {
+        formData.append("photos", photo.file);
+      });
+
+      const response = await fetch("/api/vision/analyze", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "AI analysis failed.");
+      }
+
+      setAiResult(data as VisionResponse);
+    } catch (error) {
+      setAiError(
+        error instanceof Error ? error.message : "Analysis failed."
+      );
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  function handleApplyAiDraft() {
+    if (!aiResult || !formRef.current) return;
+
+    const getClaim = (attribute: string) =>
+      aiResult.analysis.claims.find(
+        (claim) =>
+          claim.attribute === attribute &&
+          claim.value &&
+          ["observed", "inferred", "seller_confirmed"].includes(claim.status)
+      );
+
+    const brand = getClaim("brand")?.value ?? "";
+    const category = getClaim("category")?.value?.toLowerCase() ?? "";
+    const color = getClaim("color")?.value ?? "";
+
+    // Use an exact model only if the seller has confirmed it.
+    const modelClaim = getClaim("model");
+    const model =
+      modelClaim?.status === "seller_confirmed"
+        ? modelClaim.value ?? ""
+        : "";
+
+    const categoryMap: Record<string, string> = {
+      smartphone: "phones",
+      phone: "phones",
+      iphone: "phones",
+      headphones: "headphones",
+      laptop: "laptops",
+      tablet: "tablets",
+      camera: "cameras",
+      speaker: "speakers",
+      smartwatch: "smartwatches",
+      monitor: "monitors",
+    };
+
+    const categoryValue = categoryMap[category] ?? category;
+
+    const form = formRef.current;
+
+    const titleInput = form.elements.namedItem("title") as HTMLInputElement | null;
+    const categoryInput = form.elements.namedItem("category") as HTMLSelectElement | null;
+    const descriptionInput = form.elements.namedItem("description") as HTMLTextAreaElement | null;
+
+    const categoryLabel =
+      categoryValue === "phones"
+        ? "phone"
+        : category || "item";
+
+    const title = [brand, model, categoryLabel]
+      .filter(Boolean)
+      .join(" ");
+
+    if (titleInput && title.trim()) {
+      titleInput.value = title.slice(0, 120);
+    }
+
+    if (
+      categoryInput &&
+      Array.from(categoryInput.options).some(
+        (option) => option.value === categoryValue
+      )
+    ) {
+      categoryInput.value = categoryValue;
+    }
+
+    if (descriptionInput) {
+      const description = [
+        `${brand ? brand + " " : ""}${categoryLabel}.`,
+        color ? `AI-suggested color: ${color}.` : "",
+        "Please review the photographs and confirm the model, condition, accessories, and functionality before listing.",
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      descriptionInput.value = description;
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -149,6 +299,82 @@ export default function SellForm() {
               ))}
             </ul>
           )}
+
+          <div className="mt-5 space-y-4">
+            <button
+              type="button"
+              onClick={handleAnalyze}
+              disabled={analyzing || photos.length === 0}
+              className="w-full rounded-xl bg-primary px-5 py-3 font-semibold text-on-primary disabled:opacity-50"
+            >
+              {analyzing ? "Analyzing photos..." : "Analyze with AI"}
+            </button>
+
+            {photos.length > 5 && (
+              <p className="text-sm text-body">
+                AI will analyze the first 5 photos. All 8 can still be used in your listing.
+              </p>
+            )}
+
+            {aiError && (
+              <p className="text-sm text-red-600" role="alert">
+                {aiError}
+              </p>
+            )}
+
+            {aiResult && (
+              <div className="space-y-3 rounded-xl border border-hairline p-4">
+                <h3 className="font-semibold">AI Analysis Results</h3>
+
+                <p className="text-xs text-body">
+                  AI suggestions are not verified. Review before listing.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={handleApplyAiDraft}
+                  className="rounded-xl border border-primary px-4 py-2 text-sm font-semibold text-primary hover:bg-surface-soft"
+                >
+                  Fill listing with AI
+                </button>
+
+
+                {aiResult.analysis.claims
+                  .filter(
+                    (claim) =>
+                      claim.value !== null && claim.status !== "unknown"
+                  )
+                  .map((claim, index) => (
+                    <div
+                      key={`${claim.attribute}-${index}`}
+                      className="text-sm"
+                    >
+                      <span className="font-semibold capitalize">
+                        {claim.attribute}:
+                      </span>{" "}
+                      {claim.value}
+                      <span className="text-body">
+                        {" "}({claim.status})
+                      </span>
+
+                      {claim.evidence_image !== null && (
+                        <span className="text-body">
+                          {" "}— Photo {claim.evidence_image + 1}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+
+                {aiResult.coverage.missing_views.length > 0 && (
+                  <p className="text-sm text-body">
+                    Suggested additional views:{" "}
+                    {aiResult.coverage.missing_views.join(", ")}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
         </section>
 
         <section className="rounded-3xl border border-hairline bg-canvas p-5 sm:p-7" aria-labelledby="details-heading">

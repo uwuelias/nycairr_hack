@@ -44,11 +44,31 @@ export default function BrowsingChat({ currentListing }: { currentListing?: Brow
     setDraft("");
     setIsSearching(true);
     try {
-      const asksAboutPrice = Boolean(currentListing && /\b(price|priced|cost|deal|worth|overpriced|underpriced|expensive|cheap)\b/i.test(text));
-      const searchQuery = asksAboutPrice
+      
+      const asksAboutPrice = Boolean(
+        currentListing &&
+        /\b(price|priced|cost|deal|worth|overpriced|underpriced|expensive|cheap)\b/i.test(text)
+      );
+
+      const searchQuery = asksAboutPrice && currentListing
         ? currentListing.category.replaceAll("_", " ") || currentListing.title
-        : text;
-      const response = await fetch(`/api/listings?q=${encodeURIComponent(searchQuery)}&sort=newest`);
+        : text
+          .replace(
+            /^(?:i am|i'm|im)\s+(?:looking|searching)\s+for\s+/i,
+            ""
+          )
+          .replace(
+            /^(?:can you\s+)?(?:find|show me|search for|get me)\s+/i,
+            ""
+          )
+          .replace(/^(?:a|an|the)\s+/i, "")
+          .replace(/[?.!]+$/, "")
+          .trim();
+
+      const response = await fetch(
+        `/api/listings?q=${encodeURIComponent(searchQuery)}&sort=newest`
+      );
+
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "Search failed.");
       const searchListings = data.listings as ListingResult[];

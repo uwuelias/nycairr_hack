@@ -8,7 +8,9 @@ Run from the backend/ folder:   python -m api.app
 """
 import collections, json, math, os, re
 from datetime import datetime
-
+import asyncio
+import tempfile
+from pathlib import Path
 from flask import Flask, jsonify, request
 from pydantic import ValidationError
 from sqlalchemy import create_engine, text
@@ -18,6 +20,7 @@ from agents.negotiation.alternating import negotiate
 from agents.research.pricing import research
 from agents.research.schema import ListingQuery
 from services.run_logging import REVIEW_LOG, RUN_DIR
+from agents.vision_agent import analyze_product
 
 BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LISTING_DB = os.path.join(BACKEND_DIR, "data", "listing.db")
@@ -303,7 +306,47 @@ def create_app(market_engine=None):
     @app.get("/api/health")
     def health():
         return jsonify({"ok": True})
+    @app.post("/api/vision/analyze")
+    def vision_analyze():
+        uploads = request.files.getlist("photos")
 
+        if not 1 <= len(uploads) <= 5:
+            return err("Upload between 1 and 5 photos.", 400)
+
+        if request.content_length and request.content_length > 30 * 1024 * 1024:
+            return err("Upload exceeds the 30 MB limit.", 413)
+
+        allowed = {".jpg", ".jpeg", ".png", ".webp"}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            paths = []
+
+            for index, photo in enumerate(uploads):
+                extension = Path(photo.filename or "").suffix.lower()
+
+                if extension not in allowed:
+                    return err("Unsupported image format.", 400)
+
+                path = Path(temp_dir) / f"photo_{index}{extension}"
+                photo.save(path)
+
+                if path.stat().st_size == 0:
+                    return err("Empty image uploaded.", 400)
+
+                paths.append(str(path))
+
+            try:
+                result, coverage = asyncio.run(
+                    analyze_product(paths)
+                )
+            except Exception:
+                app.logger.exception("Vision analysis failed")
+                return err("Vision analysis failed. Check backend logs.", 503)
+
+            return jsonify({
+                "analysis": result.model_dump(mode="json"),
+                "coverage": coverage.model_dump(mode="json"),
+            })
     @app.post("/api/research/price")
     def price():
         try:

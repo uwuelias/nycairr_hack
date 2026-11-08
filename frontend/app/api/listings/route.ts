@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { auth0 } from "@/lib/auth0";
+import { auth0, auth0Configured } from "@/lib/auth0";
 import { getMarketplaceDatabase } from "@/lib/marketplace-database";
 import { MARKETPLACE_CATEGORIES, SELLING_CONDITIONS } from "@/lib/marketplace-options";
 import { searchMarketplaceListings } from "@/lib/listing-store";
@@ -88,9 +88,23 @@ export async function POST(request: Request) {
   }
 
   const session = await auth0?.getSession();
-  if (!session?.user.sub) {
-    return Response.json({ error: "Sign in to submit a listing." }, { status: 401 });
+
+  const url = new URL(request.url);
+
+  const localDemo =
+    process.env.NODE_ENV === "development" &&
+    process.env.DEMO_VISION_NO_AUTH === "true" &&
+    !auth0Configured &&
+    ["localhost", "127.0.0.1"].includes(url.hostname);
+
+  if (!session?.user?.sub && !localDemo) {
+    return Response.json(
+      { error: "Sign in to submit a listing." },
+      { status: 401 }
+    );
   }
+
+  const sellerId = session?.user?.sub ?? "local-demo-seller";
 
   let form: FormData;
   try {
@@ -147,7 +161,23 @@ export async function POST(request: Request) {
   }
 
   const database = getMarketplaceDatabase();
-  const userId = syncAuth0User(session.user);
+  const userId = session?.user
+  ? syncAuth0User(session.user)
+  : localDemo
+    ? syncAuth0User({
+        sub: "local-demo-seller",
+        name: "FairMarket Demo Seller",
+      })
+    : null;
+  console.log("DEBUG seller ID:", userId);
+  console.log(
+    "DEBUG seller exists:",
+    database.prepare("SELECT user_id FROM users WHERE user_id = ?").get(userId)
+  );
+  console.log(
+    "DEBUG category exists:",
+    database.prepare("SELECT category_id FROM categories WHERE category_id = ?").get(category)
+  );
 
   const uploadDirectory = resolve(
     process.cwd(),
