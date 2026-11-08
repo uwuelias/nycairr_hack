@@ -37,28 +37,21 @@ export default function Home() {
   }, []);
 
   return (
-    <main className="bg-canvas text-ink">
-      <div className="bg-surface-dark text-on-dark">
-        <SiteNavbar />
-
-        <section id="top" className="mx-auto grid max-w-7xl items-center gap-14 px-5 pb-20 pt-10 sm:px-8 sm:pb-24 lg:grid-cols-[1fr_0.9fr] lg:gap-20 lg:px-12 lg:pb-28 lg:pt-12">
-          <div>
-            <p className="text-sm font-medium text-on-dark-soft">The pre-loved technology marketplace</p>
-            <h1 className="mt-5 max-w-2xl text-5xl font-normal leading-[1.03] tracking-[-.045em] sm:text-6xl lg:text-[76px]">
-              Good tech deserves another look.
-            </h1>
-            <p className="mt-6 max-w-xl text-base leading-7 text-on-dark-soft sm:text-lg">
-              Discover phones, computers, audio, and more. Find a device with a little more life in it.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link className="inline-flex h-14 items-center rounded-full bg-primary px-8 text-base font-semibold text-on-primary" href="/marketplace">
-                Explore marketplace
-              </Link>
-              <Link className="inline-flex h-14 items-center rounded-full bg-surface-dark-elevated px-6 text-base font-semibold text-on-dark" href="#categories">
-                Browse categories
-              </Link>
-            </div>
-          </div>
+    <main className="mx-auto max-w-7xl px-5 text-ink-deep sm:px-8 lg:px-12">
+      <header className="flex h-20 items-center justify-between border-b border-hairline-soft">
+        <a className="flex items-center gap-2 text-xl font-bold tracking-tight" href="#top" aria-label="Forme home">
+          <span className="grid size-8 place-items-center rounded-full bg-primary text-on-primary">f.</span> forme
+        </a>
+        <nav className="hidden items-center gap-8 text-sm text-charcoal sm:flex" aria-label="Main navigation">
+          <a className="font-semibold text-ink-deep" href="#discover">Discover</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="/negotiate">Negotiate</a>
+        </nav>
+        <div className="flex items-center gap-2">
+          <AuthActions />
+          <a className="hidden rounded-full border-2 border-ink-deep px-5 py-3 text-sm font-bold md:inline-flex" href="#sell">Start selling</a>
+        </div>
+      </header>
 
           <div className="relative mx-auto w-full max-w-lg py-3 sm:py-8">
             <div className="absolute inset-5 rounded-3xl bg-primary/20 blur-3xl" aria-hidden="true" />
