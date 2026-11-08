@@ -1,4 +1,4 @@
-
+from services.claim_normalization import is_placeholder_value
 from typing import Literal
 from services.identifier_check import require_proposal_confirmation
 from pydantic import (
@@ -25,6 +25,7 @@ Status = Literal[
     "inferred",
     "unknown",
     "requires_user_confirmation",
+    "seller_confirmed",
 ]
 
 NextAction = Literal[
@@ -47,29 +48,40 @@ class Claim(BaseModel):
     # Explanation for unknown or unconfirmed claims.
     uncertainty_reason: str | None = None
 
-    @model_validator(mode="after")
     
+    @model_validator(mode="after")
     def check_provenance(self):
-        if self.status in ("observed", "inferred"):
-            if not self.value or not self.value.strip():
-                raise ValueError("Observed/inferred claims require a value.")
+        if self.status in {"observed", "inferred", "seller_confirmed"}:
+            if is_placeholder_value(self.value):
+                raise ValueError(
+                    "Placeholder values must use unknown status and null value."
+                )
 
-            if not self.evidence_description or not self.evidence_description.strip():
-                raise ValueError("Observed/inferred claims require evidence.")
+            if not self.value or not self.value.strip():
+                raise ValueError("This claim status requires a value.")
+
+            if (
+                not self.evidence_description
+                or not self.evidence_description.strip()
+            ):
+                raise ValueError("This claim status requires provenance.")
 
             if self.status == "observed" and self.evidence_image is None:
                 raise ValueError("Observed claims require an image index.")
 
-        else:  # unknown / requires_user_confirmation
-            if self.value is not None:
-                raise ValueError("Unknown/unconfirmed claims must have null value.")
-
-            if self.evidence_image is not None:
+        else:
+            if (
+                self.value is not None
+                or self.evidence_image is not None
+                or self.evidence_description is not None
+            ):
                 raise ValueError(
-                    "Unknown/unconfirmed claims cannot have a supporting image index."
+                    "Unknown/unconfirmed claims must have null value "
+                    "and null evidence."
                 )
 
         return self
+
 
 
 
