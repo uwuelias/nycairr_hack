@@ -1,6 +1,7 @@
 import json, os, secrets, sqlite3, time, uuid
 
-DB_PATH = "./agents/negotiation/sessions.db"
+# Absolute path so the DB is the same file no matter which directory the server is started from.
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sessions.db")
 COLUMNS = {"buyer_max", "seller_min", "buyer_approval", "seller_approval", "status",
            "proposed_price", "agreed_price", "anchor", "messages"}
 
@@ -69,6 +70,24 @@ def update(session_id: str, **fields):
     with _conn() as c:
         c.execute(f"UPDATE sessions SET {', '.join(k + ' = ?' for k in fields)} WHERE id = ?",
                   (*fields.values(), session_id))
+
+
+def add_messages(session_id: str, new: list[dict]):
+    """Append chat messages ({sender, text, price?}) to the session's persisted history."""
+    with _conn() as c:  # one transaction: read + write together
+        row = c.execute("SELECT messages FROM sessions WHERE id = ?", (session_id,)).fetchone()
+        msgs = json.loads(row["messages"] or "[]")
+        msgs.extend({**m, "ts": time.time()} for m in new)
+        c.execute("UPDATE sessions SET messages = ? WHERE id = ?", (json.dumps(msgs), session_id))
+
+
+def set_approval(session_id: str, role: str, accept: bool) -> bool:
+    """One response per side; returns False if that side already responded."""
+    col = "buyer_approval" if role == "buyer" else "seller_approval"
+    with _conn() as c:
+        cur = c.execute(f"UPDATE sessions SET {col} = ? WHERE id = ? AND {col} IS NULL",
+                        (int(accept), session_id))
+    return cur.rowcount == 1
 
 
 def log(session_id: str, actor: str, event: str, detail: str = ""):
