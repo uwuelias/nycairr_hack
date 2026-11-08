@@ -6,7 +6,7 @@ condition = ["new", "good", "fair", "poor"]
 
 SQL = text("""
     SELECT condition, AVG(price) AS avg_price, COUNT(*) AS n
-    FROM listings
+    FROM price_observations
     WHERE price_type = 'sold'
       AND category = :cat AND lower(brand) = lower(:brand) AND lower(model) = lower(:model)
       AND sold_date >= :since

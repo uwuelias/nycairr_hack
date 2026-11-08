@@ -13,7 +13,7 @@ anaconda-client @ file:///croot/anaconda-client_1743199569980/work
 anaconda-navigator @ file:///croot/anaconda-navigator_1749732987577/work
 anaconda-project @ file:///croot/anaconda-project_1746215289992/work
 annotated-types @ file:///work/perseverance-python-buildout/croot/annotated-types_1728386958747/work
-anyio @ file:///croot/anyio_1745334642479/work
+anyio==4.16.0
 appdirs==1.4.4
 archspec @ file:///croot/archspec_1709217642129/work
 argon2-cffi @ file:///opt/conda/conda-bld/argon2-cffi_1645000214183/work
@@ -42,7 +42,7 @@ botocore @ file:///croot/botocore_1738226888291/work
 Bottleneck @ file:///croot/bottleneck_1731058641041/work
 Brotli @ file:///croot/brotli-split_1736182456865/work
 cachetools @ file:///croot/cachetools_1738224668060/work
-certifi @ file:///croot/certifi_1745939216646/work/certifi
+certifi==2026.10.23
 cffi @ file:///croot/cffi_1736182485317/work
 chardet @ file:///work/perseverance-python-buildout/croot/chardet_1728402558925/work
 charset-normalizer @ file:///croot/charset-normalizer_1721748349566/work
@@ -105,10 +105,12 @@ h5py @ file:///io/buildout/croot/h5py_1739559587481/work
 HeapDict @ file:///Users/ktietz/demo/mc3/conda-bld/heapdict_1630598515714/work
 holoviews @ file:///croot/holoviews_1741882128583/work
 httpcore @ file:///croot/httpcore_1748526048470/work
+httpcore2==2.16.0
 httpx @ file:///croot/httpx_1746747840559/work
+httpx2==2.16.0
 hvplot @ file:///croot/hvplot_1746471209567/work
 hyperlink @ file:///tmp/build/80754af9/hyperlink_1610130746837/work
-idna @ file:///work/perseverance-python-buildout/croot/idna_1728385935861/work
+idna==3.20
 imageio @ file:///croot/imageio_1738159938990/work
 imagesize @ file:///work/perseverance-python-buildout/croot/imagesize_1728396505813/work
 imbalanced-learn @ file:///croot/imbalanced-learn_1738614356256/work
@@ -133,6 +135,7 @@ jeepney @ file:///tmp/build/80754af9/jeepney_1627537048313/work
 jellyfish @ file:///croot/jellyfish_1736366665756/work
 Jinja2 @ file:///croot/jinja2_1741710844255/work
 jinja2-time @ file:///opt/conda/conda-bld/jinja2-time_1649251842261/work
+jiter==0.19.0
 jmespath @ file:///work/perseverance-python-buildout/croot/jmespath_1728388559617/work
 joblib @ file:///work/perseverance-python-buildout/croot/joblib_1728392999985/work
 json5 @ file:///io/perseverance-python-buildout/croot/json5_1731701245495/work
@@ -154,6 +157,15 @@ jupyterlab_server @ file:///io/buildout/croot/jupyterlab_server_1742574181361/wo
 jupyterlab_widgets @ file:///io/buildout/croot/jupyterlab_widgets_1735843098209/work
 keyring @ file:///croot/keyring_1745484691218/work
 kiwisolver @ file:///croot/kiwisolver_1737039087198/work
+langchain-core==1.7.6
+langchain-ollama==1.1.0
+langchain-openai==1.7.4
+langchain-protocol==0.0.21
+langgraph==1.2.20
+langgraph-checkpoint==4.3.1
+langgraph-prebuilt==1.1.1
+langgraph-sdk==0.4.14
+langsmith==0.14.17
 lazy_loader @ file:///work/perseverance-python-buildout/croot/lazy_loader_1728399784779/work
 lckr_jupyterlab_variableinspector @ file:///croot/jupyterlab-variableinspector_1744638296328/work
 libarchive-c @ file:///croot/python-libarchive-c_1726069797193/work
@@ -199,7 +211,11 @@ numba @ file:///croot/numba_1740752693581/work
 numexpr @ file:///io/perseverance-python-buildout/croot/numexpr_1731701292781/work
 numpy @ file:///croot/numpy_and_numpy_base_1730835581507/work/dist/numpy-2.1.3-cp313-cp313-linux_x86_64.whl#sha256=93cc19de59d42f9bf7c3d5ba08393a478655029d2a15deb048523ce617da711c
 numpydoc @ file:///io/buildout/croot/numpydoc_1732921012507/work
+ollama==0.6.3
+openai==3.46.0
 openpyxl @ file:///croot/openpyxl_1736366913861/work
+orjson==3.13.0
+ormsgpack==1.13.0
 overrides @ file:///work/perseverance-python-buildout/croot/overrides_1728386766389/work
 packaging @ file:///croot/packaging_1734472117206/work
 pandas @ file:///croot/pandas_1732735089971/work/dist/pandas-2.2.3-cp313-cp313-linux_x86_64.whl#sha256=248baa16b8f7b48e3a9c0e641fba9a72bce9c95c0dddf7c9a7547016b61fe3fb
@@ -343,6 +359,7 @@ textdistance @ file:///io/buildout/croot/textdistance_1735863821730/work
 threadpoolctl @ file:///croot/threadpoolctl_1731006087558/work
 three-merge @ file:///tmp/build/80754af9/three-merge_1607553261110/work
 tifffile @ file:///croot/tifffile_1741164537642/work
+tiktoken==0.14.0
 tinycss2 @ file:///io/buildout/croot/tinycss2_1739558158888/work
 tldextract @ file:///work/perseverance-python-buildout/croot/tldextract_1728412293461/work
 toml @ file:///tmp/build/80754af9/toml_1616166611790/work
@@ -355,17 +372,19 @@ traitlets @ file:///work/perseverance-python-buildout/croot/traitlets_1728385099
 truststore @ file:///croot/truststore_1736550121485/work
 Twisted @ file:///croot/twisted_1743537782170/work
 typer @ file:///work/perseverance-python-buildout/croot/typer_1728397851651/work
-typing_extensions @ file:///croot/typing_extensions_1734714854207/work
+typing_extensions==4.16.0
 tzdata @ file:///croot/python-tzdata_1746123641790/work
 uc-micro-py @ file:///work/perseverance-python-buildout/croot/uc-micro-py_1728395631322/work
 ujson @ file:///croot/ujson_1736541024667/work
 Unidecode @ file:///work/perseverance-python-buildout/croot/unidecode_1728516903550/work
 urllib3 @ file:///croot/urllib3_1737133630106/work
+uuid_utils==0.19.0
 w3lib @ file:///Users/ktietz/demo/mc3/conda-bld/w3lib_1629359764703/work
 watchdog @ file:///croot/watchdog_1740409902579/work
 wcwidth @ file:///Users/ktietz/demo/mc3/conda-bld/wcwidth_1629357192024/work
 webencodings @ file:///work/perseverance-python-buildout/croot/webencodings_1728385731103/work
 websocket-client @ file:///work/perseverance-python-buildout/croot/websocket-client_1728386934860/work
+websockets==17.4
 Werkzeug @ file:///croot/werkzeug_1737448706492/work
 whatthepatch @ file:///work/perseverance-python-buildout/croot/whatthepatch_1728401584954/work
 wheel==0.45.1
@@ -373,6 +392,7 @@ widgetsnbextension @ file:///io/buildout/croot/widgetsnbextension_1735843395399/
 wrapt @ file:///croot/wrapt_1736540904746/work
 wurlitzer @ file:///work/perseverance-python-buildout/croot/wurlitzer_1728401637202/work
 xarray @ file:///croot/xarray_1749131597036/work
+xxhash==4.0.2
 xyzservices @ file:///work/perseverance-python-buildout/croot/xyzservices_1728395656117/work
 yapf @ file:///work/perseverance-python-buildout/croot/yapf_1728401740441/work
 yarl @ file:///croot/yarl_1732546845924/work

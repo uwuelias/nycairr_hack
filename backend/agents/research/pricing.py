@@ -4,8 +4,8 @@ No LLM here. The buyer/seller agents and the explain node only read the report.
 """
 from datetime import datetime, timezone
 from schema import ListingQuery, PriceReport
-from comps import avg_price_by_condition
-from sqlalchemy import create_engine
+from agents.research.comps import avg_price_by_condition
+from sqlalchemy import create_engine, text
 
 MIN_N = 5                 
 WINDOWS = (180, 365)     
@@ -59,4 +59,28 @@ def research(engine, q: ListingQuery, as_of: datetime | None = None) -> PriceRep
         basis=f"mean of {n} sold listings, condition={q.condition}, last {days} days",
         condition_averages=by_cond, caveats=caveats)
 
-engine = create_engine("sqlite:///market.db")
+engine = create_engine("sqlite:///./data/listing.db")
+
+with engine.connect() as c:
+    as_of = datetime.fromisoformat(
+        c.execute(text("SELECT max(fetched_at) FROM price_observations")).scalar())
+
+tests = [
+    # 1. plenty of data: should be confidence "high"
+    ListingQuery(category="phones", brand="Apple", model="iPhone 13", condition="good"),
+
+    # 2. thin data (about 9 sales): should be "low"
+    ListingQuery(category="phones", brand="Apple", model="iPhone 13", condition="poor"),
+
+    # 3. variant given: should warn that it pools all storage sizes
+    ListingQuery(category="laptops", brand="Apple", model="MacBook Air M1",
+                 condition="like_new", attributes={"ram": "16GB", "storage": "512GB"}),
+
+    # 4. too little data: should be "insufficient" with no price
+    ListingQuery(category="game_consoles", brand="Analogue", model="Pocket", condition="good"),
+]
+
+for q in tests:
+    r = research(engine, q, as_of=as_of)
+    print(q.brand, q.model, q.condition, "->", r.confidence, r.p50, f"(n={r.n_comps})")
+    print("  caveats:", r.caveats)
